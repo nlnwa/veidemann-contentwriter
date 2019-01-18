@@ -15,14 +15,17 @@
  */
 package no.nb.nna.veidemann.contentwriter.warc;
 
-import no.nb.nna.veidemann.api.ContentWriterProto.WriteRequestMeta;
+import no.nb.nna.veidemann.api.config.v1.Collection.SubCollection;
+import no.nb.nna.veidemann.api.config.v1.ConfigObject;
+import no.nb.nna.veidemann.api.contentwriter.v1.WriteRequestMeta;
+import no.nb.nna.veidemann.commons.util.Sha1Digest;
 import no.nb.nna.veidemann.contentwriter.Util;
 import no.nb.nna.veidemann.db.ProtoUtils;
-import org.jwat.warc.WarcFileNaming;
 import org.jwat.warc.WarcFileWriter;
 import org.jwat.warc.WarcFileWriterConfig;
 import org.jwat.warc.WarcRecord;
 import org.jwat.warc.WarcWriter;
+import org.yaml.snakeyaml.Yaml;
 
 import java.io.File;
 import java.io.IOException;
@@ -31,9 +34,10 @@ import java.io.UncheckedIOException;
 import java.net.URI;
 import java.util.Date;
 import java.util.GregorianCalendar;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
-import java.util.UUID;
 
 import static org.jwat.warc.WarcConstants.*;
 
@@ -42,11 +46,17 @@ import static org.jwat.warc.WarcConstants.*;
  */
 public class SingleWarcWriter implements AutoCloseable {
 
-    WarcFileWriter warcFileWriter;
+    final WarcFileWriter warcFileWriter;
+    final VeidemannWarcFileNaming warcFileNaming;
+    final ConfigObject config;
+    final SubCollection subCollection;
 
-    public SingleWarcWriter(String filePrefix, File targetDir, long maxFileSize, boolean compress, String hostName) {
-        WarcFileNaming warcFileNaming = new VeidemannWarcFileNaming(filePrefix, hostName);
-        WarcFileWriterConfig writerConfig = new WarcFileWriterConfig(targetDir, compress, maxFileSize, false);
+    public SingleWarcWriter(ConfigObject config, SubCollection subCollection, String filePrefix, File targetDir, String hostName) {
+        this.config = config;
+        this.subCollection = subCollection;
+        warcFileNaming = new VeidemannWarcFileNaming(filePrefix, hostName);
+        WarcFileWriterConfig writerConfig = new WarcFileWriterConfig(targetDir, config.getCollection().getCompress(),
+                config.getCollection().getFileSize(), false);
         warcFileWriter = WarcFileWriter.getWarcWriterInstance(warcFileNaming, writerConfig);
     }
 
@@ -144,37 +154,28 @@ public class SingleWarcWriter implements AutoCloseable {
         record.header.addHeader(FN_WARC_FILENAME, finalFileName);
         record.header.addHeader(FN_WARC_RECORD_ID, "<" + warcFileWriter.warcinfoRecordId + ">");
         record.header.addHeader(FN_CONTENT_TYPE, "application/warc-fields");
-        record.header.addHeader(FN_CONTENT_LENGTH, "0");
-        // Standard says no.
-        //record.header.addHeader(FN_WARC_CONCURRENT_TO, "<urn:uuid:" + filedescUuid + ">");
-        writer.writeHeader(record);
-        writer.closeRecord();
 
-//                managedPayload.manageVersionBlock(arcRecord, true);
-//
-//                contentLength = managedPayload.payloadLength;
-//                warcBlockDigest = WarcDigest.createWarcDigest("SHA1", managedPayload.blockDigestBytes, "base32", Base32
-//                        .encodeArray(managedPayload.blockDigestBytes));
-        record = WarcRecord.createRecord(writer);
-        record.header.addHeader(FN_WARC_TYPE, RT_METADATA);
-//                record.header.addHeader(FN_WARC_TARGET_URI, arcRecord.header.urlUri, arcRecord.header.urlStr);
-        record.header.addHeader(FN_WARC_DATE, cal.getTime(), null);
-        String fileDescUuid = "<urn:uuid:" + UUID.randomUUID() + ">";
-        record.header.addHeader(FN_WARC_RECORD_ID, fileDescUuid);
-        record.header.addHeader(FN_WARC_CONCURRENT_TO, "<" + warcFileWriter.warcinfoRecordId + ">");
-//                record.header.addHeader(FN_WARC_IP_ADDRESS, arcRecord.header.inetAddress, arcRecord.header.ipAddressStr);
-        record.header.addHeader(FN_WARC_WARCINFO_ID, "<" + warcFileWriter.warcinfoRecordId + ">");
-//                record.header.addHeader(FN_WARC_BLOCK_DIGEST, warcBlockDigest, null);
-//                record.header.addHeader(FN_CONTENT_LENGTH, contentLength, null);
-        record.header.addHeader(FN_CONTENT_LENGTH, 0, null);
-        record.header.addHeader(FN_CONTENT_TYPE, "text/plain");
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("isPartOf", warcFileNaming.getFilePrefix());
+        payload.put("collection", config.getMeta().getName());
+        if (subCollection != null) {
+            payload.put("subCollection", subCollection.getName());
+        }
+        payload.put("host", warcFileNaming.getHostName());
+        payload.put("format", "WARC File Format 1.1");
+        payload.put("description", config.getMeta().getDescription());
+
+        Yaml yaml = new Yaml();
+
+        byte[] payloadBytes = yaml.dumpAsMap(payload).getBytes();
+        Sha1Digest payloadDigest = new Sha1Digest();
+        payloadDigest.update(payloadBytes);
+
+        record.header.addHeader(FN_CONTENT_LENGTH, payloadBytes.length, null);
+        record.header.addHeader(FN_WARC_PAYLOAD_DIGEST, payloadDigest.getPrefixedDigestString());
         writer.writeHeader(record);
-//                payloadStream = managedPayload.getPayloadStream();
-//                if (payloadStream != null) {
-//                    writer.streamPayload(payloadStream);
-//                    payloadStream.close();
-//                    payloadStream = null;
-//                }
+
+        writer.writePayload(payloadBytes);
         writer.closeRecord();
     }
 

@@ -1,6 +1,6 @@
 package no.nb.nna.veidemann.contentwriter;
 
-import no.nb.nna.veidemann.api.ContentWriterProto.RecordType;
+import no.nb.nna.veidemann.api.contentwriter.v1.RecordType;
 
 import java.util.UUID;
 

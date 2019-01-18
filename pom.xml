@@ -1,18 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <parent>
-        <groupId>com.github.nlnwa.veidemann-harvester</groupId>
-        <artifactId>veidemann</artifactId>
-        <version>v0.1.7</version>
-    </parent>
-
+    <groupId>com.github.nlnwa</groupId>
     <artifactId>veidemann-contentwriter</artifactId>
+    <version>0</version>
     <packaging>jar</packaging>
 
+    <organization>
+        <name>National Library of Norway</name>
+        <url>http://nb.no</url>
+    </organization>
+
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
     <properties>
-        <veidemann.version>v0.1.7</veidemann.version>
-        <org.apache.tika.version>1.19.1</org.apache.tika.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <docker.tag>latest</docker.tag>
+        <docker.java.image>openjdk:8-jdk-alpine</docker.java.image>
+
+        <veidemann.version>0.3.0</veidemann.version>
+        <veidemann.api.version>v1.0.0-beta2</veidemann.api.version>
+        <org.apache.tika.version>1.20</org.apache.tika.version>
+        <org.jwat.version>1.0.4</org.jwat.version>
+        <log4j.version>2.7</log4j.version>
+
+        <rethinkdb.version>2.3.6</rethinkdb.version>
     </properties>
 
     <repositories>
@@ -24,9 +45,9 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.github.nlnwa.veidemann-harvester</groupId>
+            <groupId>com.github.nlnwa</groupId>
             <artifactId>veidemann-api</artifactId>
-            <version>${veidemann.version}</version>
+            <version>${veidemann.api.version}</version>
         </dependency>
         <dependency>
             <groupId>com.github.nlnwa.veidemann-harvester</groupId>
@@ -41,24 +62,29 @@
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-netty</artifactId>
+            <version>1.17.1</version>
         </dependency>
 
         <!-- ARC/WARC libraries -->
         <dependency>
             <groupId>org.jwat</groupId>
             <artifactId>jwat-common</artifactId>
+            <version>${org.jwat.version}</version>
         </dependency>
         <dependency>
             <groupId>org.jwat</groupId>
             <artifactId>jwat-gzip</artifactId>
+            <version>${org.jwat.version}</version>
         </dependency>
         <dependency>
             <groupId>org.jwat</groupId>
             <artifactId>jwat-warc</artifactId>
+            <version>${org.jwat.version}</version>
         </dependency>
         <dependency>
             <groupId>org.jwat</groupId>
             <artifactId>jwat-archive</artifactId>
+            <version>${org.jwat.version}</version>
         </dependency>
 
         <dependency>
@@ -81,16 +107,91 @@
         <dependency>
             <groupId>com.typesafe</groupId>
             <artifactId>config</artifactId>
+            <version>1.3.3</version>
         </dependency>
 
+        <!-- Do all logging thru Log4j -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.21</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-jul</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+
+        <!-- Test dependencies -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.12</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.8.0</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
+            <version>2.13.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>3.0.0-M3</version>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>integration-test</goal>
+                                <goal>verify</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>io.fabric8</groupId>
+                    <artifactId>docker-maven-plugin</artifactId>
+                    <version>0.28.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>appassembler-maven-plugin</artifactId>
+                    <version>2.0.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.0.2</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
         <plugins>
             <!-- Make version number available for application -->
             <plugin>
@@ -103,6 +204,238 @@
                             <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
                         </manifest>
                     </archive>
+                </configuration>
+            </plugin>
+
+            <!-- Build Docker image -->
+            <plugin>
+                <groupId>io.fabric8</groupId>
+                <artifactId>docker-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>docker-build</id>
+                    </execution>
+                </executions>
+                <configuration>
+                    <removeVolumes>true</removeVolumes>
+                    <autoCreateCustomNetworks>true</autoCreateCustomNetworks>
+                    <verbose>false</verbose>
+                    <startParallel>false</startParallel>
+
+                    <volumes>
+                        <volume>
+                            <name>rethink-data</name>
+                        </volume>
+                        <volume>
+                            <name>contentwriter-workdir</name>
+                        </volume>
+                        <volume>
+                            <name>contentwriter-warcs</name>
+                            <driver>local</driver>
+                            <opts>
+                                <type>tmpfs</type>
+                                <device>tmpfs</device>
+                            </opts>
+                            <labels>
+                                <volatileData>true</volatileData>
+                            </labels>
+                        </volume>
+                    </volumes>
+                    <images>
+                        <image>
+                            <name>norsknettarkiv/${project.artifactId}</name>
+                            <alias>${project.artifactId}</alias>
+                            <build>
+                                <from>${docker.java.image}</from>
+                                <maintainer>National Library of Norway</maintainer>
+                                <tags>
+                                    <tag>${docker.tag}</tag>
+                                </tags>
+                                <optimise>true</optimise>
+                                <runCmds>
+                                    <run>mkdir /workdir</run>
+                                    <run>mkdir /warcs</run>
+                                </runCmds>
+                                <volumes>
+                                    <volume>/workdir</volume>
+                                    <volume>/warcs</volume>
+                                </volumes>
+                                <env>
+                                    <WORK_DIR>/workdir</WORK_DIR>
+                                    <WARC_DIR>/warcs</WARC_DIR>
+                                </env>
+                                <ports>
+                                    <port>8080</port>
+                                </ports>
+                                <cmd>
+                                    <exec>
+                                        <arg>/veidemann/bin/${project.artifactId}</arg>
+                                    </exec>
+                                </cmd>
+                                <assembly>
+                                    <targetDir>/veidemann</targetDir>
+
+                                    <inline>
+                                        <includeBaseDirectory>true</includeBaseDirectory>
+                                        <fileSets>
+                                            <fileSet>
+                                                <directory>target/appassembler/bin</directory>
+                                                <outputDirectory>bin</outputDirectory>
+                                                <includes>
+                                                    <include>${project.artifactId}</include>
+                                                </includes>
+                                                <fileMode>0755</fileMode>
+                                            </fileSet>
+                                            <fileSet>
+                                                <directory>target/appassembler/bin</directory>
+                                                <outputDirectory>bin</outputDirectory>
+                                                <excludes>
+                                                    <exclude>${project.artifactId}</exclude>
+                                                </excludes>
+                                                <fileMode>0644</fileMode>
+                                            </fileSet>
+                                            <fileSet>
+                                                <directory>target/appassembler</directory>
+                                                <outputDirectory>/</outputDirectory>
+                                                <excludes>
+                                                    <exclude>bin</exclude>
+                                                </excludes>
+                                            </fileSet>
+                                        </fileSets>
+                                        <files>
+                                            <file>
+                                                <source>LICENSE</source>
+                                                <outputDirectory></outputDirectory>
+                                                <fileMode>0644</fileMode>
+                                            </file>
+                                        </files>
+                                    </inline>
+                                </assembly>
+                            </build>
+                        </image>
+
+                        <image>
+                            <name>rethinkdb:${rethinkdb.version}</name>
+                            <alias>db</alias>
+                            <run>
+                                <network>
+                                    <mode>custom</mode>
+                                    <name>contentwriter-test-net</name>
+                                    <alias>db</alias>
+                                </network>
+                                <ports>
+                                    <port>+db.host:db.port:28015</port>
+                                    <port>+dbgui.host:dbgui.port:8080</port>
+                                </ports>
+                                <volumes>
+                                    <bind>
+                                        <volume>rethink-data:/data</volume>
+                                    </bind>
+                                </volumes>
+                                <log>
+                                    <enabled>true</enabled>
+                                </log>
+                                <wait>
+                                    <log>Server ready.*</log>
+                                    <time>40000</time>
+                                </wait>
+                            </run>
+                        </image>
+                        <image>
+                            <name>norsknettarkiv/veidemann-db-initializer</name>
+                            <alias>db-initializer</alias>
+                            <run>
+                                <network>
+                                    <mode>custom</mode>
+                                    <name>contentwriter-test-net</name>
+                                    <alias>db-initializer</alias>
+                                </network>
+                                <dependsOn>
+                                    <container>db</container>
+                                </dependsOn>
+                                <env>
+                                    <DB_HOST>db</DB_HOST>
+                                    <DB_USER>admin</DB_USER>
+                                    <DB_PASSWORD></DB_PASSWORD>
+                                </env>
+                                <log>
+                                    <enabled>true</enabled>
+                                </log>
+                                <wait>
+                                    <log>DB initialized</log>
+                                    <time>60000</time>
+                                </wait>
+                            </run>
+                        </image>
+                        <image>
+                            <name>norsknettarkiv/veidemann-contentwriter</name>
+                            <alias>contentwriter</alias>
+                            <run>
+                                <network>
+                                    <mode>custom</mode>
+                                    <name>contentwriter-test-net</name>
+                                    <alias>contentwriter</alias>
+                                </network>
+                                <ports>
+                                    <port>+contentwriter.host:contentwriter.port:8080</port>
+                                </ports>
+                                <dependsOn>
+                                    <container>db-initializer</container>
+                                </dependsOn>
+                                <volumes>
+                                    <bind>
+                                        <volume>contentwriter-warcs:/warcs</volume>
+                                        <volume>contentwriter-workdir:/workdir</volume>
+                                    </bind>
+                                </volumes>
+                                <env>
+                                    <DB_HOST>db</DB_HOST>
+                                    <WARC_WRITER_POOL_SIZE>4</WARC_WRITER_POOL_SIZE>
+                                </env>
+                                <log>
+                                    <enabled>true</enabled>
+                                </log>
+                                <wait>
+                                    <log>Veidemann Content Writer .* started</log>
+                                    <time>30000</time>
+                                </wait>
+                            </run>
+                        </image>
+                        <image>
+                            <name>norsknettarkiv/veidemann-contentexplorer</name>
+                            <alias>contentexplorer</alias>
+                            <run>
+                                <network>
+                                    <mode>custom</mode>
+                                    <name>contentwriter-test-net</name>
+                                    <alias>contentexplorer</alias>
+                                </network>
+                                <ports>
+                                    <port>+contentexplorer.host:contentexplorer.port:8081</port>
+                                </ports>
+                                <dependsOn>
+                                    <container>db-initializer</container>
+                                </dependsOn>
+                                <volumes>
+                                    <bind>
+                                        <volume>contentwriter-warcs:/warcs</volume>
+                                        <volume>contentwriter-workdir:/workdir</volume>
+                                    </bind>
+                                </volumes>
+                                <env>
+                                    <DB_HOST>db</DB_HOST>
+                                    <UNSAFE>true</UNSAFE>
+                                </env>
+                                <log>
+                                    <enabled>true</enabled>
+                                </log>
+                                <wait>
+                                    <log>Veidemann Content Explorer .* started</log>
+                                    <time>30000</time>
+                                </wait>
+                            </run>
+                        </image>
+                    </images>
                 </configuration>
             </plugin>
         </plugins>
@@ -131,7 +464,9 @@
                             <configurationDirectory>config</configurationDirectory>
                             <endorsedDir>plugins</endorsedDir>
                             <preAssembleDirectory>src/main/distfiles</preAssembleDirectory>
-                            <extraJvmArguments>-Dconfig.file=@BASEDIR@/config/application.conf -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap</extraJvmArguments>
+                            <extraJvmArguments>-Dconfig.file=@BASEDIR@/config/application.conf
+                                -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap
+                            </extraJvmArguments>
                         </configuration>
                         <executions>
                             <execution>
@@ -156,80 +491,62 @@
                                 </goals>
                             </execution>
                         </executions>
-                        <configuration>
-                            <images>
-                                <image>
-                                    <name>norsknettarkiv/${project.artifactId}</name>
-                                    <alias>${project.artifactId}</alias>
-                                    <build>
-                                        <from>${docker.java.image}</from>
-                                        <maintainer>National Library of Norway</maintainer>
-                                        <tags>
-                                            <tag>${docker.tag}</tag>
-                                        </tags>
-                                        <optimise>true</optimise>
-                                        <runCmds>
-                                            <run>mkdir /workdir</run>
-                                            <run>mkdir /warcs</run>
-                                        </runCmds>
-                                        <volumes>
-                                            <volume>/workdir</volume>
-                                            <volume>/warcs</volume>
-                                        </volumes>
-                                        <env>
-                                            <WORK_DIR>/workdir</WORK_DIR>
-                                            <WARC_DIR>/warcs</WARC_DIR>
-                                        </env>
-                                        <ports>
-                                            <port>8080</port>
-                                        </ports>
-                                        <cmd>
-                                            <exec>
-                                                <arg>/veidemann/bin/${project.artifactId}</arg>
-                                            </exec>
-                                        </cmd>
-                                        <assembly>
-                                            <targetDir>/veidemann</targetDir>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
 
-                                            <inline>
-                                                <includeBaseDirectory>true</includeBaseDirectory>
-                                                <fileSets>
-                                                    <fileSet>
-                                                        <directory>target/appassembler/bin</directory>
-                                                        <outputDirectory>bin</outputDirectory>
-                                                        <includes>
-                                                            <include>${project.artifactId}</include>
-                                                        </includes>
-                                                        <fileMode>0755</fileMode>
-                                                    </fileSet>
-                                                    <fileSet>
-                                                        <directory>target/appassembler/bin</directory>
-                                                        <outputDirectory>bin</outputDirectory>
-                                                        <excludes>
-                                                            <exclude>${project.artifactId}</exclude>
-                                                        </excludes>
-                                                        <fileMode>0644</fileMode>
-                                                    </fileSet>
-                                                    <fileSet>
-                                                        <directory>target/appassembler</directory>
-                                                        <outputDirectory>/</outputDirectory>
-                                                        <excludes>
-                                                            <exclude>bin</exclude>
-                                                        </excludes>
-                                                    </fileSet>
-                                                </fileSets>
-                                                <files>
-                                                    <file>
-                                                        <source>LICENSE</source>
-                                                        <outputDirectory></outputDirectory>
-                                                        <fileMode>0644</fileMode>
-                                                    </file>
-                                                </files>
-                                            </inline>
-                                        </assembly>
-                                    </build>
-                                </image>
-                            </images>
+        <profile>
+            <id>integration-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>io.fabric8</groupId>
+                        <artifactId>docker-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>prepare-tests</id>
+                                <phase>pre-integration-test</phase>
+                                <goals>
+                                    <!--<goal>build</goal>-->
+                                    <goal>volume-create</goal>
+                                    <goal>start</goal>
+                                </goals>
+                                <configuration>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>remove-tests</id>
+                                <phase>post-integration-test</phase>
+                                <goals>
+                                    <goal>stop</goal>
+                                    <goal>volume-remove</goal>
+                                </goals>
+                                <configuration>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-failsafe-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>integration-test</goal>
+                                    <goal>verify</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <systemPropertyVariables>
+                                <db.host>${db.host}</db.host>
+                                <db.port>${db.port}</db.port>
+                                <contentwriter.host>${contentwriter.host}</contentwriter.host>
+                                <contentwriter.port>${contentwriter.port}</contentwriter.port>
+                                <contentexplorer.host>${contentexplorer.host}</contentexplorer.host>
+                                <contentexplorer.port>${contentexplorer.port}</contentexplorer.port>
+                            </systemPropertyVariables>
                         </configuration>
                     </plugin>
                 </plugins>

@@ -24,8 +24,7 @@ import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.db.DbServiceSPI;
 import no.nb.nna.veidemann.contentwriter.text.TextExtractor;
 import no.nb.nna.veidemann.contentwriter.warc.SingleWarcWriter;
-import no.nb.nna.veidemann.contentwriter.warc.WarcWriterPool;
-import no.nb.nna.veidemann.contentwriter.warc.WarcWriterPool.PooledWarcWriter;
+import no.nb.nna.veidemann.contentwriter.warc.WarcCollectionRegistry;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -33,7 +32,6 @@ import org.junit.rules.ExpectedException;
 import java.net.URISyntaxException;
 
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  *
@@ -49,18 +47,19 @@ public class ContentwriterServiceTest {
     public void testSaveEntity() throws StatusException, InterruptedException, URISyntaxException {
         DbServiceSPI dbProviderMock = mock(DbServiceSPI.class);
         DbService.configure(dbProviderMock);
-        WarcWriterPool warcWriterPoolMock = mock(WarcWriterPool.class);
-        PooledWarcWriter pooledWarcWriterMock = mock(PooledWarcWriter.class);
+        WarcCollectionRegistry warcCollectionRegistry = mock(WarcCollectionRegistry.class);
         SingleWarcWriter singleWarcWriterMock = mock(SingleWarcWriter.class);
         TextExtractor textExtractorMock = mock(TextExtractor.class);
 
         InProcessServerBuilder inProcessServerBuilder = InProcessServerBuilder.forName(uniqueServerName).directExecutor();
         ManagedChannelBuilder inProcessChannelBuilder = InProcessChannelBuilder.forName(uniqueServerName).directExecutor();
-        try (ApiServer inProcessServer = new ApiServer(inProcessServerBuilder, warcWriterPoolMock, textExtractorMock).start();
+        try (ApiServer inProcessServer = new ApiServer(inProcessServerBuilder, warcCollectionRegistry, textExtractorMock).start();
              ContentWriterClient client = new ContentWriterClient(inProcessChannelBuilder);) {
 
-            when(warcWriterPoolMock.borrow()).thenReturn(pooledWarcWriterMock);
-            when(pooledWarcWriterMock.getWarcWriter()).thenReturn(singleWarcWriterMock);
+//            when(warcWriterPoolMock.borrow()).thenReturn(pooledWarcWriterMock);
+//            when(pooledWarcWriterMock.getWarcWriter()).thenReturn(singleWarcWriterMock);
+
+
 //            when(singleWarcWriterMock.writeWarcHeader(any())).thenReturn(new URI("foo:bar"));
 //
 //            ContentWriterSession session1 = client.createSession();

@@ -43,8 +43,8 @@ public class SingleWarcWriterTest {
             file.delete();
         }
 
-        try (SingleWarcWriter instance = new SingleWarcWriter("f", targetDir, maxFileSize, compress, "Host");) {
-            for (int i = 0; i < 10; i++) {
+//        try (SingleWarcWriter instance = new SingleWarcWriter("f", targetDir, maxFileSize, compress, "Host");) {
+//            for (int i = 0; i < 10; i++) {
 //                DbObjectFactory.of(CrawlLog.class, "{\n"
 //                        + "\"contentType\":  \"image/gif\" ,\n"
 //                        + "\"digest\":  \"sha1:dc1cdfa814046ea64609c438e1777f55ff3aa86c\" ,\n"
@@ -71,9 +71,9 @@ public class SingleWarcWriterTest {
 //                        throw new RuntimeException(ex);
 //                    }
 //                        });
-
-            }
-        }
+//
+//            }
+//        }
         // TODO review the generated test code and remove the default call to fail.
 //        fail("The test case is a prototype.");
     }

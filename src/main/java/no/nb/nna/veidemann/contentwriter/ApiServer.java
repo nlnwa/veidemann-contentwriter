@@ -21,7 +21,7 @@ import io.grpc.ServerBuilder;
 import io.opentracing.contrib.ServerTracingInterceptor;
 import io.opentracing.util.GlobalTracer;
 import no.nb.nna.veidemann.contentwriter.text.TextExtractor;
-import no.nb.nna.veidemann.contentwriter.warc.WarcWriterPool;
+import no.nb.nna.veidemann.contentwriter.warc.WarcCollectionRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,24 +34,24 @@ import java.io.UncheckedIOException;
 public class ApiServer implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(ApiServer.class);
     private final Server server;
-    private final WarcWriterPool warcWriterPool;
+    private final WarcCollectionRegistry warcCollectionRegistry;
 
     /**
      * Construct a new REST API server.
      */
-    public ApiServer(int port, WarcWriterPool warcWriterPool, TextExtractor textExtractor) {
-        this(ServerBuilder.forPort(port), warcWriterPool, textExtractor);
+    public ApiServer(int port, WarcCollectionRegistry warcCollectionRegistry, TextExtractor textExtractor) {
+        this(ServerBuilder.forPort(port), warcCollectionRegistry, textExtractor);
     }
 
-    public ApiServer(ServerBuilder<?> serverBuilder, WarcWriterPool warcWriterPool, TextExtractor textExtractor) {
+    public ApiServer(ServerBuilder<?> serverBuilder, WarcCollectionRegistry warcCollectionRegistry, TextExtractor textExtractor) {
 
         ServerTracingInterceptor tracingInterceptor = new ServerTracingInterceptor.Builder(GlobalTracer.get())
                 .withTracedAttributes(ServerTracingInterceptor.ServerRequestAttribute.CALL_ATTRIBUTES,
                         ServerTracingInterceptor.ServerRequestAttribute.METHOD_TYPE)
                 .build();
 
-        this.warcWriterPool = warcWriterPool;
-        server = serverBuilder.addService(tracingInterceptor.intercept(new ContentWriterService(warcWriterPool, textExtractor))).build();
+        this.warcCollectionRegistry = warcCollectionRegistry;
+        server = serverBuilder.addService(tracingInterceptor.intercept(new ContentWriterService(warcCollectionRegistry, textExtractor))).build();
     }
 
     public ApiServer start() {
@@ -79,8 +79,8 @@ public class ApiServer implements AutoCloseable {
 
     @Override
     public void close() {
-        if (warcWriterPool != null) {
-            warcWriterPool.close();
+        if (warcCollectionRegistry != null) {
+            warcCollectionRegistry.close();
         }
         if (server != null) {
             server.shutdown();

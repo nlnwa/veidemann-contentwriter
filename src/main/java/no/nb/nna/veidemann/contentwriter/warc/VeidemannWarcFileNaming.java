@@ -20,11 +20,6 @@ public class VeidemannWarcFileNaming implements WarcFileNaming {
     protected String filePrefix;
 
     /**
-     * Date component converted into a human readable string.
-     */
-    protected String dateStr;
-
-    /**
      * Host name component.
      */
     protected String hostName;
@@ -50,7 +45,6 @@ public class VeidemannWarcFileNaming implements WarcFileNaming {
         }
         this.hostName = hostName;
         extension = ".warc";
-        dateStr = dateFormat.format(new Date());
     }
 
     @Override
@@ -60,6 +54,8 @@ public class VeidemannWarcFileNaming implements WarcFileNaming {
 
     @Override
     public String getFilename(int sequenceNr, boolean bCompressed) {
+        String dateStr = dateFormat.format(new Date());
+
         String filename = filePrefix + "-" + dateStr
                 + "-" + hostName
                 + "-" + String.format("%05d", sequenceNumber.getAndIncrement()) + extension;
@@ -69,4 +65,11 @@ public class VeidemannWarcFileNaming implements WarcFileNaming {
         return filename;
     }
 
+    public String getFilePrefix() {
+        return filePrefix;
+    }
+
+    public String getHostName() {
+        return hostName;
+    }
 }
