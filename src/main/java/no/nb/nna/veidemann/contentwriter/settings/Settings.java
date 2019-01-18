@@ -29,17 +29,9 @@ public class Settings extends CommonSettings {
 
     private String warcDir;
 
-    private String filePrefix;
-
     private int warcWriterPoolSize;
 
-    private ConfigMemorySize warcFileSize;
-
-    private boolean compressWarc;
-
     private String workDir;
-
-    private boolean unsafe;
 
     public int getApiPort() {
         return apiPort;
@@ -65,14 +57,6 @@ public class Settings extends CommonSettings {
         this.warcDir = warcDir;
     }
 
-    public String getFilePrefix() {
-        return filePrefix;
-    }
-
-    public void setFilePrefix(String filePrefix) {
-        this.filePrefix = filePrefix;
-    }
-
     public int getWarcWriterPoolSize() {
         return warcWriterPoolSize;
     }
@@ -81,36 +65,12 @@ public class Settings extends CommonSettings {
         this.warcWriterPoolSize = warcWriterPoolSize;
     }
 
-    public ConfigMemorySize getWarcFileSize() {
-        return warcFileSize;
-    }
-
-    public void setWarcFileSize(ConfigMemorySize warcFileSize) {
-        this.warcFileSize = warcFileSize;
-    }
-
-    public boolean isCompressWarc() {
-        return compressWarc;
-    }
-
-    public void setCompressWarc(boolean compressWarc) {
-        this.compressWarc = compressWarc;
-    }
-
     public String getWorkDir() {
         return workDir;
     }
 
     public void setWorkDir(String workDir) {
         this.workDir = workDir;
-    }
-
-    public boolean isUnsafe() {
-        return unsafe;
-    }
-
-    public void setUnsafe(boolean unsafe) {
-        this.unsafe = unsafe;
     }
 
 }

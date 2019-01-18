@@ -15,23 +15,26 @@
  */
 package no.nb.nna.veidemann.contentwriter;
 
-import com.google.protobuf.Empty;
 import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.stub.StreamObserver;
-import no.nb.nna.veidemann.api.ContentWriterGrpc;
-import no.nb.nna.veidemann.api.ContentWriterProto.RecordType;
-import no.nb.nna.veidemann.api.ContentWriterProto.WriteReply;
-import no.nb.nna.veidemann.api.ContentWriterProto.WriteRequest;
-import no.nb.nna.veidemann.api.ContentWriterProto.WriteRequestMeta;
-import no.nb.nna.veidemann.api.ContentWriterProto.WriteResponseMeta;
-import no.nb.nna.veidemann.api.MessagesProto;
+import no.nb.nna.veidemann.api.config.v1.ConfigObject;
+import no.nb.nna.veidemann.api.contentwriter.v1.ContentWriterGrpc;
+import no.nb.nna.veidemann.api.contentwriter.v1.CrawledContent;
+import no.nb.nna.veidemann.api.contentwriter.v1.RecordType;
+import no.nb.nna.veidemann.api.contentwriter.v1.WriteReply;
+import no.nb.nna.veidemann.api.contentwriter.v1.WriteRequest;
+import no.nb.nna.veidemann.api.contentwriter.v1.WriteRequestMeta;
+import no.nb.nna.veidemann.api.contentwriter.v1.WriteResponseMeta;
+import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbAdapter;
 import no.nb.nna.veidemann.commons.db.DbException;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.contentwriter.text.TextExtractor;
 import no.nb.nna.veidemann.contentwriter.warc.SingleWarcWriter;
-import no.nb.nna.veidemann.contentwriter.warc.WarcWriterPool;
+import no.nb.nna.veidemann.contentwriter.warc.WarcCollection;
+import no.nb.nna.veidemann.contentwriter.warc.WarcCollection.Instance;
+import no.nb.nna.veidemann.contentwriter.warc.WarcCollectionRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -59,13 +62,16 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
 
     private final DbAdapter db;
 
-    private final WarcWriterPool warcWriterPool;
+    private final ConfigAdapter config;
+
+    private final WarcCollectionRegistry warcCollectionRegistry;
 
     private final TextExtractor textExtractor;
 
-    public ContentWriterService(WarcWriterPool warcWriterPool, TextExtractor textExtractor) {
+    public ContentWriterService(WarcCollectionRegistry warcCollectionRegistry, TextExtractor textExtractor) {
         this.db = DbService.getInstance().getDbAdapter();
-        this.warcWriterPool = warcWriterPool;
+        this.config = DbService.getInstance().getConfigAdapter();
+        this.warcCollectionRegistry = warcCollectionRegistry;
         this.textExtractor = textExtractor;
     }
 
@@ -75,7 +81,7 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
             private final Map<Integer, ContentBuffer> contentBuffers = new HashMap<>();
 
             private WriteRequestMeta writeRequestMeta;
-
+            private ConfigObject collectionConfig;
             private boolean canceled = false;
 
             private ContentBuffer getContentBuffer(Integer recordNum) {
@@ -101,6 +107,27 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
                 switch (value.getValueCase()) {
                     case META:
                         writeRequestMeta = value.getMeta();
+                        try {
+                            if (!writeRequestMeta.hasCollectionRef()) {
+                                String msg = "No collection id in request";
+                                LOG.error(msg);
+                                Status status = Status.INVALID_ARGUMENT.withDescription(msg);
+                                responseObserver.onError(status.asException());
+                            } else {
+                                collectionConfig = config.getConfigObject(writeRequestMeta.getCollectionRef());
+                                if (collectionConfig == null || !collectionConfig.hasMeta() || !collectionConfig.hasCollection()) {
+                                    String msg = "Collection with id '" + writeRequestMeta.getCollectionRef() + "' is missing or insufficient: " + collectionConfig;
+                                    LOG.error(msg);
+                                    Status status = Status.UNKNOWN.withDescription(msg);
+                                    responseObserver.onError(status.asException());
+                                }
+                            }
+                        } catch (DbException e) {
+                            String msg = "Error getting collection config " + writeRequestMeta.getCollectionRef();
+                            LOG.error(msg);
+                            Status status = Status.UNKNOWN.withDescription(msg);
+                            responseObserver.onError(status.asException());
+                        }
                         break;
                     case HEADER:
                         contentBuffer = getContentBuffer(value.getHeader().getRecordNum());
@@ -198,7 +225,8 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
                         .map(cb -> cb.getWarcId())
                         .collect(Collectors.toList());
 
-                try (WarcWriterPool.PooledWarcWriter pooledWarcWriter = warcWriterPool.borrow()) {
+                WarcCollection collection = warcCollectionRegistry.getWarcCollection(collectionConfig);
+                try (Instance warcWriters = collection.getWarcWriters()) {
                     for (Entry<Integer, ContentBuffer> recordEntry : contentBuffers.entrySet()) {
                         ContentBuffer contentBuffer = recordEntry.getValue();
                         try {
@@ -207,10 +235,11 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
                             recordMeta = recordMeta.toBuilder().setPayloadDigest(contentBuffer.getPayloadDigest()).build();
 
                             if (recordMeta.getType() == RecordType.RESPONSE) {
-                                recordMeta = detectRevisit(contentBuffer, recordMeta);
+                                recordMeta = detectRevisit(contentBuffer, recordMeta, collection);
                             }
 
-                            URI ref = writeRecord(pooledWarcWriter, contentBuffer, writeRequestMeta, recordMeta, allRecordIds);
+                            URI ref = writeRecord(warcWriters.getWarcWriter(
+                                    recordMeta.getSubCollection()), contentBuffer, writeRequestMeta, recordMeta, allRecordIds);
 
                             WriteResponseMeta.RecordMeta.Builder responseMeta = WriteResponseMeta.RecordMeta.newBuilder()
                                     .setRecordNum(recordMeta.getRecordNum())
@@ -219,7 +248,8 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
                                     .setStorageRef(ref.toString())
                                     .setBlockDigest(contentBuffer.getBlockDigest())
                                     .setPayloadDigest(contentBuffer.getPayloadDigest())
-                                    .setWarcRefersTo(recordMeta.getWarcRefersTo());
+                                    .setWarcRefersTo(recordMeta.getWarcRefersTo())
+                                    .setCollectionFinalName(collection.getCollectionName(recordMeta.getSubCollection()));
 
                             reply.getMetaBuilder().putRecordMeta(responseMeta.getRecordNum(), responseMeta.build());
                         } catch (StatusException ex) {
@@ -244,41 +274,14 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
         };
     }
 
-    @Override
-    public void flush(Empty request, StreamObserver<Empty> responseObserver) {
-        try {
-            warcWriterPool.restart(false);
-            responseObserver.onNext(Empty.getDefaultInstance());
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error("Failed flush: {}", ex.getMessage(), ex);
-            responseObserver.onError(Status.UNKNOWN.withDescription(ex.toString()).asException());
-        }
-    }
-
-    @Override
-    public void delete(Empty request, StreamObserver<Empty> responseObserver) {
-        try {
-            if (ContentWriter.getSettings().isUnsafe()) {
-                warcWriterPool.restart(true);
-                responseObserver.onNext(Empty.getDefaultInstance());
-                responseObserver.onCompleted();
-            } else {
-                responseObserver.onError(Status.PERMISSION_DENIED.withDescription("Deletion not allowed").asException());
-            }
-        } catch (Exception ex) {
-            LOG.error("Failed delete: {}", ex.getMessage(), ex);
-            responseObserver.onError(Status.UNKNOWN.withDescription(ex.toString()).asException());
-        }
-    }
-
     private WriteRequestMeta.RecordMeta detectRevisit(final ContentBuffer contentBuffer,
-                                                      final WriteRequestMeta.RecordMeta recordMeta) {
-        Optional<MessagesProto.CrawledContent> isDuplicate = null;
+                                                      final WriteRequestMeta.RecordMeta recordMeta,
+                                                      final WarcCollection collection) {
+        Optional<CrawledContent> isDuplicate = null;
         try {
             isDuplicate = db
-                    .hasCrawledContent(MessagesProto.CrawledContent.newBuilder()
-                            .setDigest(contentBuffer.getPayloadDigest())
+                    .hasCrawledContent(CrawledContent.newBuilder()
+                            .setDigest(contentBuffer.getPayloadDigest() + ":" + collection.getCollectionName(recordMeta.getSubCollection()))
                             .setWarcId(contentBuffer.getWarcId())
                             .build());
         } catch (DbException e) {
@@ -303,14 +306,13 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
         return recordMeta;
     }
 
-    private URI writeRecord(final WarcWriterPool.PooledWarcWriter pooledWarcWriter,
+    private URI writeRecord(final SingleWarcWriter warcWriter,
                             final ContentBuffer contentBuffer, final WriteRequestMeta request,
                             final WriteRequestMeta.RecordMeta recordMeta, final List<String> allRecordIds)
             throws StatusException {
 
         long size = 0L;
 
-        SingleWarcWriter warcWriter = pooledWarcWriter.getWarcWriter();
         URI ref;
 
         try {

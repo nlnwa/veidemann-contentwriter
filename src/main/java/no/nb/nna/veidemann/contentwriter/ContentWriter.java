@@ -24,11 +24,9 @@ import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.opentracing.TracerFactory;
 import no.nb.nna.veidemann.contentwriter.settings.Settings;
 import no.nb.nna.veidemann.contentwriter.text.TextExtractor;
-import no.nb.nna.veidemann.contentwriter.warc.WarcWriterPool;
+import no.nb.nna.veidemann.contentwriter.warc.WarcCollectionRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.File;
 
 /**
  * Class for launching the service.
@@ -62,15 +60,9 @@ public class ContentWriter {
     public ContentWriter start() {
         try (DbService db = DbService.configure(SETTINGS);
 
-             WarcWriterPool warcWriterPool = new WarcWriterPool(
-                     SETTINGS.getFilePrefix(),
-                     new File(SETTINGS.getWarcDir()),
-                     SETTINGS.getWarcFileSize().toBytes(),
-                     SETTINGS.isCompressWarc(),
-                     SETTINGS.getWarcWriterPoolSize(),
-                     SETTINGS.getHostName());
+             WarcCollectionRegistry warcCollectionRegistry = new WarcCollectionRegistry();
              TextExtractor textExtractor = new TextExtractor();
-             ApiServer apiServer = new ApiServer(SETTINGS.getApiPort(), warcWriterPool, textExtractor).start();) {
+             ApiServer apiServer = new ApiServer(SETTINGS.getApiPort(), warcCollectionRegistry, textExtractor).start();) {
 
             LOG.info("Veidemann Content Writer (v. {}) started",
                     ContentWriter.class.getPackage().getImplementationVersion());
