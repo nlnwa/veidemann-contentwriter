@@ -15,38 +15,36 @@
  */
 package no.nb.nna.veidemann.contentwriter;
 
+import com.google.protobuf.ByteString;
 import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.stub.StreamObserver;
-import no.nb.nna.veidemann.api.config.v1.ConfigObject;
 import no.nb.nna.veidemann.api.contentwriter.v1.ContentWriterGrpc;
-import no.nb.nna.veidemann.api.contentwriter.v1.CrawledContent;
 import no.nb.nna.veidemann.api.contentwriter.v1.RecordType;
+import no.nb.nna.veidemann.api.contentwriter.v1.StorageRef;
 import no.nb.nna.veidemann.api.contentwriter.v1.WriteReply;
 import no.nb.nna.veidemann.api.contentwriter.v1.WriteRequest;
-import no.nb.nna.veidemann.api.contentwriter.v1.WriteRequestMeta;
 import no.nb.nna.veidemann.api.contentwriter.v1.WriteResponseMeta;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbAdapter;
-import no.nb.nna.veidemann.commons.db.DbException;
 import no.nb.nna.veidemann.commons.db.DbService;
+import no.nb.nna.veidemann.contentwriter.WriteSessionContext.RecordData;
 import no.nb.nna.veidemann.contentwriter.text.TextExtractor;
 import no.nb.nna.veidemann.contentwriter.warc.SingleWarcWriter;
 import no.nb.nna.veidemann.contentwriter.warc.WarcCollection;
 import no.nb.nna.veidemann.contentwriter.warc.WarcCollection.Instance;
 import no.nb.nna.veidemann.contentwriter.warc.WarcCollectionRegistry;
+import org.apache.http.HttpException;
+import org.apache.http.HttpResponse;
+import org.apache.http.impl.io.DefaultHttpResponseParser;
+import org.apache.http.impl.io.HttpTransportMetricsImpl;
+import org.apache.http.impl.io.SessionInputBufferImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 import static io.netty.handler.codec.http.HttpConstants.CR;
 import static io.netty.handler.codec.http.HttpConstants.LF;
@@ -78,78 +76,37 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
     @Override
     public StreamObserver<WriteRequest> write(StreamObserver<WriteReply> responseObserver) {
         return new StreamObserver<WriteRequest>() {
-            private final Map<Integer, ContentBuffer> contentBuffers = new HashMap<>();
-
-            private WriteRequestMeta writeRequestMeta;
-            private ConfigObject collectionConfig;
-            private boolean canceled = false;
-
-            private ContentBuffer getContentBuffer(Integer recordNum) {
-                return contentBuffers.computeIfAbsent(recordNum, n -> new ContentBuffer());
-            }
-
-            private WriteRequestMeta.RecordMeta getRecordMeta(int recordNum) throws StatusException {
-                WriteRequestMeta.RecordMeta m = writeRequestMeta.getRecordMetaOrDefault(recordNum, null);
-                if (m == null) {
-                    throw Status.INVALID_ARGUMENT.withDescription("Missing metadata").asException();
-                }
-                return m;
-            }
+            private WriteSessionContext context = new WriteSessionContext();
 
             @Override
             public void onNext(WriteRequest value) {
-                if (writeRequestMeta != null) {
-                    MDC.put("eid", writeRequestMeta.getExecutionId());
-                    MDC.put("uri", writeRequestMeta.getTargetUri());
-                }
+                context.initMDC();
 
                 ContentBuffer contentBuffer;
                 switch (value.getValueCase()) {
                     case META:
-                        writeRequestMeta = value.getMeta();
                         try {
-                            if (!writeRequestMeta.hasCollectionRef()) {
-                                String msg = "No collection id in request";
-                                LOG.error(msg);
-                                Status status = Status.INVALID_ARGUMENT.withDescription(msg);
-                                responseObserver.onError(status.asException());
-                            } else {
-                                collectionConfig = config.getConfigObject(writeRequestMeta.getCollectionRef());
-                                if (collectionConfig == null || !collectionConfig.hasMeta() || !collectionConfig.hasCollection()) {
-                                    String msg = "Collection with id '" + writeRequestMeta.getCollectionRef() + "' is missing or insufficient: " + collectionConfig;
-                                    LOG.error(msg);
-                                    Status status = Status.UNKNOWN.withDescription(msg);
-                                    responseObserver.onError(status.asException());
-                                }
-                            }
-                        } catch (DbException e) {
-                            String msg = "Error getting collection config " + writeRequestMeta.getCollectionRef();
-                            LOG.error(msg);
-                            Status status = Status.UNKNOWN.withDescription(msg);
-                            responseObserver.onError(status.asException());
+                            context.setWriteRequestMeta(value.getMeta());
+                        } catch (StatusException e) {
+                            responseObserver.onError(e);
                         }
                         break;
-                    case HEADER:
-                        contentBuffer = getContentBuffer(value.getHeader().getRecordNum());
+                    case PROTOCOL_HEADER:
+                        contentBuffer = context.getRecordData(value.getProtocolHeader().getRecordNum()).getContentBuffer();
                         if (contentBuffer.hasHeader()) {
                             LOG.error("Header received twice");
                             Status status = Status.INVALID_ARGUMENT.withDescription("Header received twice");
                             responseObserver.onError(status.asException());
                             break;
                         }
-                        contentBuffer.setHeader(value.getHeader().getData());
+                        contentBuffer.setHeader(value.getProtocolHeader().getData());
                         break;
                     case PAYLOAD:
-                        contentBuffer = getContentBuffer(value.getPayload().getRecordNum());
+                        contentBuffer = context.getRecordData(value.getPayload().getRecordNum()).getContentBuffer();
                         contentBuffer.addPayload(value.getPayload().getData());
                         break;
                     case CANCEL:
-                        canceled = true;
-                        String cancelReason = value.getCancel();
-                        LOG.debug("Request cancelled before WARC record written. Reason {}", cancelReason);
-                        for (ContentBuffer cb : contentBuffers.values()) {
-                            cb.close();
-                        }
+                        context.cancelSession(value.getCancel());
                         break;
                     default:
                         break;
@@ -158,98 +115,61 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
 
             @Override
             public void onError(Throwable t) {
-                if (writeRequestMeta != null) {
-                    MDC.put("uri", writeRequestMeta.getTargetUri());
-                    MDC.put("eid", writeRequestMeta.getExecutionId());
-                }
+                context.initMDC();
                 LOG.error("Error caught: {}", t.getMessage(), t);
-                for (ContentBuffer contentBuffer : contentBuffers.values()) {
-                    contentBuffer.close();
-                }
+                context.cancelSession(t.getMessage());
             }
 
             @Override
             public void onCompleted() {
-                if (canceled) {
+                context.initMDC();
+                if (context.isCanceled()) {
                     responseObserver.onNext(WriteReply.getDefaultInstance());
                     responseObserver.onCompleted();
                     return;
                 }
 
-                if (writeRequestMeta == null) {
+                if (!context.hasWriteRequestMeta()) {
                     LOG.error("Missing metadata object");
                     Status status = Status.INVALID_ARGUMENT.withDescription("Missing metadata object");
                     responseObserver.onError(status.asException());
                     return;
                 }
 
-                MDC.put("uri", writeRequestMeta.getTargetUri());
-                MDC.put("eid", writeRequestMeta.getExecutionId());
-
                 WriteReply.Builder reply = WriteReply.newBuilder();
-                // Validate
-                for (Entry<Integer, ContentBuffer> recordEntry : contentBuffers.entrySet()) {
-                    try {
-                        ContentBuffer contentBuffer = recordEntry.getValue();
-                        WriteRequestMeta.RecordMeta recordMeta = getRecordMeta(recordEntry.getKey());
-
-                        if (contentBuffer.getTotalSize() == 0L) {
-                            LOG.error("Nothing to store");
-                            throw Status.INVALID_ARGUMENT.withDescription("Nothing to store").asException();
-                        }
-
-                        if (contentBuffer.getTotalSize() != recordMeta.getSize()) {
-                            LOG.error("Size mismatch. Expected {}, but was {}",
-                                    recordMeta.getSize(), contentBuffer.getTotalSize());
-                            throw Status.INVALID_ARGUMENT.withDescription("Size mismatch").asException();
-                        }
-
-                        if (!contentBuffer.getBlockDigest().equals(recordMeta.getBlockDigest())) {
-                            LOG.error("Block digest mismatch. Expected {}, but was {}",
-                                    recordMeta.getBlockDigest(), contentBuffer.getBlockDigest());
-                            throw Status.INVALID_ARGUMENT.withDescription("Block digest mismatch").asException();
-                        }
-
-                        if (writeRequestMeta.getIpAddress().isEmpty()) {
-                            LOG.error("Missing IP-address");
-                            throw Status.INVALID_ARGUMENT.withDescription("Missing IP-address").asException();
-                        }
-                    } catch (StatusException ex) {
-                        responseObserver.onError(ex);
-                        return;
-                    }
+                try {
+                    context.validateSession();
+                } catch (StatusException e) {
+                    responseObserver.onError(e);
+                    return;
                 }
 
-                // Write
-                List<String> allRecordIds = contentBuffers.values().stream()
-                        .map(cb -> cb.getWarcId())
-                        .collect(Collectors.toList());
-
-                WarcCollection collection = warcCollectionRegistry.getWarcCollection(collectionConfig);
+                WarcCollection collection = warcCollectionRegistry.getWarcCollection(context.getCollectionConfig());
                 try (Instance warcWriters = collection.getWarcWriters()) {
-                    for (Entry<Integer, ContentBuffer> recordEntry : contentBuffers.entrySet()) {
-                        ContentBuffer contentBuffer = recordEntry.getValue();
-                        try {
-                            WriteRequestMeta.RecordMeta recordMeta = getRecordMeta(recordEntry.getKey());
+                    for (Integer recordNum : context.getRecordNums()) {
+                        try (RecordData recordData = context.getRecordData(recordNum);) {
+                            context.detectRevisit(recordNum, collection);
 
-                            recordMeta = recordMeta.toBuilder().setPayloadDigest(contentBuffer.getPayloadDigest()).build();
+                            URI ref = writeRecord(warcWriters.getWarcWriter(recordData.getSubCollectionType()), recordData);
 
-                            if (recordMeta.getType() == RecordType.RESPONSE) {
-                                recordMeta = detectRevisit(contentBuffer, recordMeta, collection);
-                            }
-
-                            URI ref = writeRecord(warcWriters.getWarcWriter(
-                                    recordMeta.getSubCollection()), contentBuffer, writeRequestMeta, recordMeta, allRecordIds);
+                            StorageRef storageRef = StorageRef.newBuilder()
+                                    .setWarcId(recordData.getWarcId())
+                                    .setRecordType(recordData.getRecordType())
+                                    .setStorageRef(ref.toString())
+                                    .build();
+                            db.saveStorageRef(storageRef);
 
                             WriteResponseMeta.RecordMeta.Builder responseMeta = WriteResponseMeta.RecordMeta.newBuilder()
-                                    .setRecordNum(recordMeta.getRecordNum())
-                                    .setType(recordMeta.getType())
-                                    .setWarcId(contentBuffer.getWarcId())
+                                    .setRecordNum(recordNum)
+                                    .setType(recordData.getRecordType())
+                                    .setWarcId(recordData.getWarcId())
                                     .setStorageRef(ref.toString())
-                                    .setBlockDigest(contentBuffer.getBlockDigest())
-                                    .setPayloadDigest(contentBuffer.getPayloadDigest())
-                                    .setWarcRefersTo(recordMeta.getWarcRefersTo())
-                                    .setCollectionFinalName(collection.getCollectionName(recordMeta.getSubCollection()));
+                                    .setBlockDigest(recordData.getContentBuffer().getBlockDigest())
+                                    .setPayloadDigest(recordData.getContentBuffer().getPayloadDigest())
+                                    .setCollectionFinalName(collection.getCollectionName(recordData.getSubCollectionType()));
+                            if (recordData.getRevisitRef() != null) {
+                                responseMeta.setRevisitReferenceId(recordData.getRevisitRef().getWarcId());
+                            }
 
                             reply.getMetaBuilder().putRecordMeta(responseMeta.getRecordNum(), responseMeta.build());
                         } catch (StatusException ex) {
@@ -258,8 +178,6 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
                         } catch (Exception ex) {
                             LOG.error("Failed write: {}", ex.getMessage(), ex);
                             responseObserver.onError(Status.fromThrowable(ex).asException());
-                        } finally {
-                            contentBuffer.close();
                         }
                     }
                     responseObserver.onNext(reply.build());
@@ -274,49 +192,13 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
         };
     }
 
-    private WriteRequestMeta.RecordMeta detectRevisit(final ContentBuffer contentBuffer,
-                                                      final WriteRequestMeta.RecordMeta recordMeta,
-                                                      final WarcCollection collection) {
-        Optional<CrawledContent> isDuplicate = null;
-        try {
-            isDuplicate = db
-                    .hasCrawledContent(CrawledContent.newBuilder()
-                            .setDigest(contentBuffer.getPayloadDigest() + ":" + collection.getCollectionName(recordMeta.getSubCollection()))
-                            .setWarcId(contentBuffer.getWarcId())
-                            .build());
-        } catch (DbException e) {
-            LOG.error("Failed checking for revisit, treating as new object", e);
-            return recordMeta;
-        }
-
-        if (isDuplicate.isPresent()) {
-            WriteRequestMeta.RecordMeta.Builder recordMetaBuilder = recordMeta.toBuilder();
-            recordMetaBuilder.setType(RecordType.REVISIT)
-                    .setRecordContentType("application/http")
-                    .setBlockDigest(contentBuffer.getHeaderDigest())
-                    .setPayloadDigest(isDuplicate.get().getDigest())
-                    .setSize(contentBuffer.getHeaderSize())
-                    .setWarcRefersTo(isDuplicate.get().getWarcId());
-
-            contentBuffer.removePayload();
-            LOG.debug("Detected {} as a revisit of {}",
-                    MDC.get("uri"), recordMeta.getWarcRefersTo());
-            return recordMetaBuilder.build();
-        }
-        return recordMeta;
-    }
-
-    private URI writeRecord(final SingleWarcWriter warcWriter,
-                            final ContentBuffer contentBuffer, final WriteRequestMeta request,
-                            final WriteRequestMeta.RecordMeta recordMeta, final List<String> allRecordIds)
-            throws StatusException {
-
+    private URI writeRecord(final SingleWarcWriter warcWriter, RecordData recordData) throws StatusException {
+        ContentBuffer contentBuffer = recordData.getContentBuffer();
         long size = 0L;
-
         URI ref;
 
         try {
-            ref = warcWriter.writeWarcHeader(contentBuffer.getWarcId(), request, recordMeta, allRecordIds);
+            ref = warcWriter.writeWarcHeader(recordData);
 
             if (contentBuffer.hasHeader()) {
                 size += warcWriter.addPayload(contentBuffer.getHeader().newInput());
@@ -329,16 +211,18 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
                 }
 
                 long payloadSize = warcWriter.addPayload(contentBuffer.getPayload().newInput());
-                if (recordMeta.getType() == RecordType.RESPONSE) {
+                if (recordData.getRecordType() == RecordType.RESPONSE && contentBuffer.getHeader() != null) {
                     try {
-                        textExtractor.analyze(contentBuffer.getWarcId(), request.getTargetUri(), recordMeta.getPayloadContentType(),
-                                request.getStatusCode(), contentBuffer.getPayload().newInput(), db);
+                        HttpResponse httpMessage = getHttpResponse(contentBuffer);
+                        textExtractor.analyze(recordData.getWarcId(), recordData.getTargetUri(),
+                                httpMessage.getFirstHeader("content-type").getValue(),
+                                httpMessage.getStatusLine().getStatusCode(),
+                                contentBuffer.getPayload().newInput(), db);
                     } catch (Exception ex) {
                         LOG.error("Failed extracting text");
                     }
                 }
-
-                LOG.debug("Payload of size {}b written for {}", payloadSize, request.getTargetUri());
+                LOG.debug("Payload of size {}b written for {}", payloadSize, recordData.getTargetUri());
                 size += payloadSize;
             }
         } catch (IOException ex) {
@@ -350,9 +234,9 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
         try {
             warcWriter.closeRecord();
         } catch (IOException ex) {
-            if (recordMeta.getSize() != size) {
+            if (recordData.getRecordMeta().getSize() != size) {
                 Status status = Status.OUT_OF_RANGE.withDescription("Size doesn't match metadata. Expected "
-                        + recordMeta.getSize() + ", but was " + size);
+                        + recordData.getRecordMeta().getSize() + ", but was " + size);
                 LOG.error(status.getDescription());
                 throw status.asException();
             } else {
@@ -363,6 +247,14 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
         }
 
         return ref;
+    }
+
+    public HttpResponse getHttpResponse(ContentBuffer contentBuffer) throws IOException, HttpException {
+        ByteString headerBuf = contentBuffer.getHeader();
+        SessionInputBufferImpl sessionInputBuffer = new SessionInputBufferImpl(new HttpTransportMetricsImpl(), headerBuf.size());
+        sessionInputBuffer.bind(new ByteArrayInputStream(headerBuf.toByteArray()));
+        DefaultHttpResponseParser responseParser = new DefaultHttpResponseParser(sessionInputBuffer);
+        return responseParser.parse();
     }
 
 }

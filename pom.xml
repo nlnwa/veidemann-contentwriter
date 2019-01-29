@@ -27,10 +27,10 @@
         <docker.tag>latest</docker.tag>
         <docker.java.image>openjdk:8-jdk-alpine</docker.java.image>
 
-        <veidemann.version>0.3.0</veidemann.version>
-        <veidemann.api.version>v1.0.0-beta2</veidemann.api.version>
+        <veidemann.version>0.3.3</veidemann.version>
+        <veidemann.api.version>v1.0.0-beta3</veidemann.api.version>
         <org.apache.tika.version>1.20</org.apache.tika.version>
-        <org.jwat.version>1.0.4</org.jwat.version>
+        <org.jwat.version>1.1.1</org.jwat.version>
         <log4j.version>2.7</log4j.version>
 
         <rethinkdb.version>2.3.6</rethinkdb.version>
