@@ -26,7 +26,7 @@ import static io.netty.handler.codec.http.HttpConstants.LF;
 /**
  *
  */
-public class ContentBuffer {
+public class ContentBuffer implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(ContentBuffer.class);
 
@@ -35,7 +35,7 @@ public class ContentBuffer {
     private final static String EMPTY_DIGEST_STRING = "sha1:da39a3ee5e6b4b0d3255bfef95601890afd80709";
 
     private final Sha1Digest blockDigest;
-    private final Sha1Digest payloadDigest;
+    private Sha1Digest payloadDigest;
     private Sha1Digest headerDigest;
 
     private ByteString headerBuf;
@@ -45,7 +45,6 @@ public class ContentBuffer {
 
     public ContentBuffer() {
         this.blockDigest = new Sha1Digest();
-        this.payloadDigest = new Sha1Digest();
         this.warcId = Util.createIdentifier();
     }
 
@@ -63,6 +62,7 @@ public class ContentBuffer {
             if (hasHeader()) {
                 // Add the payload separator to the digest
                 blockDigest.update(CRLF);
+                payloadDigest = new Sha1Digest();
             }
         } else {
             payloadBuf = payloadBuf.concat(payload);
@@ -72,7 +72,9 @@ public class ContentBuffer {
 
     private void updateDigest(ByteString buf, Sha1Digest... digests) {
         for (Sha1Digest d : digests) {
-            d.update(buf);
+            if (d != null) {
+                d.update(buf);
+            }
         }
     }
 
@@ -81,7 +83,14 @@ public class ContentBuffer {
     }
 
     public String getPayloadDigest() {
-        return payloadDigest.getPrefixedDigestString();
+        if (hasHeader()) {
+            if (payloadDigest == null) {
+                return EMPTY_DIGEST_STRING;
+            } else {
+                return payloadDigest.getPrefixedDigestString();
+            }
+        }
+        return "";
     }
 
     public String getHeaderDigest() {
@@ -133,5 +142,7 @@ public class ContentBuffer {
 
     public void close() {
         // Clean up resources
+        headerBuf = null;
+        payloadBuf = null;
     }
 }
