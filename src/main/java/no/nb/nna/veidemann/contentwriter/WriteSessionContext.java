@@ -83,9 +83,9 @@ public class WriteSessionContext {
                     throw status.asException();
                 }
             }
-        } catch (DbException e) {
+        } catch (Exception e) {
             String msg = "Error getting collection config " + writeRequestMeta.getCollectionRef();
-            LOG.error(msg);
+            LOG.error(msg, e);
             Status status = Status.UNKNOWN.withDescription(msg);
             throw status.asException();
         }

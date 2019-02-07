@@ -43,8 +43,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.jwat.warc.WarcRecord;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -106,16 +104,13 @@ public class ContentWriterServiceTestIT {
 
         writeHttpRecords();
         writeHttpRecords();
+        writeDnsRecord();
 
         WarcFileSet wfs = WarcInspector.getWarcFiles();
         wfs.listFiles().forEach(wf -> {
             System.out.println(wf.getName());
             try (Stream<WarcRecord> stream = wf.getContent()) {
                 stream.forEach(r -> {
-                    String content = "";
-                    if (r.hasPayload()) {
-                        content = "\n    " + new BufferedReader(new InputStreamReader(r.getPayload().getInputStreamComplete())).lines().collect(Collectors.joining("\n    "));
-                    }
                     System.out.println("  - " + r.header.warcRecordIdStr + " " + r.header.versionStr + " " + r.header.warcTypeStr);
                 });
             }
@@ -205,7 +200,12 @@ public class ContentWriterServiceTestIT {
                 .setData(responsePayloadData)
                 .build());
 
-        WriteResponseMeta res = session.finish();
+        WriteResponseMeta res = null;
+        try {
+            res = session.finish();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         assertThat(session.isOpen()).isFalse();
         return res;
     }
@@ -241,6 +241,42 @@ public class ContentWriterServiceTestIT {
                 .setData(payloadData)
                 .build();
         session.sendPayload(screenshot);
+
+        WriteResponseMeta res = session.finish();
+        assertThat(session.isOpen()).isFalse();
+        return res;
+    }
+
+    private WriteResponseMeta writeDnsRecord() throws ParseException, StatusException, InterruptedException {
+        ContentWriterSession session = contentWriterClient.createSession();
+        assertThat(session.isOpen()).isTrue();
+
+        Sha1Digest blockDigest = new Sha1Digest();
+        ByteString payloadData = ByteString.copyFromUtf8("dns record");
+        blockDigest.update(payloadData);
+
+        RecordMeta dnsMeta = RecordMeta.newBuilder()
+                .setRecordNum(0)
+                .setType(RecordType.RESOURCE)
+                .setRecordContentType("text/dns")
+                .setSize(payloadData.size())
+                .setBlockDigest(blockDigest.getPrefixedDigestString())
+                .setSubCollection(SubCollectionType.DNS)
+                .build();
+        WriteRequestMeta meta = WriteRequestMeta.newBuilder()
+                .setTargetUri("dns:www.example.com")
+                .setFetchTimeStamp(Timestamps.parse("2016-09-19T17:20:24Z"))
+                .setIpAddress("127.0.0.1")
+                .setCollectionRef(ConfigRef.newBuilder().setKind(Kind.collection).setId("2fa23773-d7e1-4748-8ab6-9253e470a3f5"))
+                .putRecordMeta(0, dnsMeta)
+                .build();
+        session.sendMetadata(meta);
+
+        Data dns = Data.newBuilder()
+                .setRecordNum(0)
+                .setData(payloadData)
+                .build();
+        session.sendPayload(dns);
 
         WriteResponseMeta res = session.finish();
         assertThat(session.isOpen()).isFalse();
@@ -327,9 +363,15 @@ public class ContentWriterServiceTestIT {
                     assertThat(actual.header.warcTargetUriStr)
                             .as("%s for record type '%s' should not be null", FN_WARC_TARGET_URI, actual.header.warcTypeStr)
                             .isNotEmpty();
-                    assertThat(actual.header.warcConcurrentToList)
-                            .as("%s for record type '%s' should not be empty", FN_WARC_CONCURRENT_TO, actual.header.warcTypeStr)
-                            .isNotEmpty();
+                    if ("text/dns".equals(actual.header.contentTypeStr)) {
+                        assertThat(actual.header.warcConcurrentToList)
+                                .as("%s for record type '%s' should be empty", FN_WARC_CONCURRENT_TO, actual.header.warcTypeStr)
+                                .isEmpty();
+                    } else {
+                        assertThat(actual.header.warcConcurrentToList)
+                                .as("%s for record type '%s' should not be empty", FN_WARC_CONCURRENT_TO, actual.header.warcTypeStr)
+                                .isNotEmpty();
+                    }
                     assertThat(actual.header.warcBlockDigestStr)
                             .as("%s for record type '%s' should not be empty", FN_WARC_BLOCK_DIGEST, actual.header.warcTypeStr)
                             .isNotEmpty();
