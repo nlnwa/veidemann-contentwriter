@@ -80,36 +80,42 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
 
             @Override
             public void onNext(WriteRequest value) {
-                context.initMDC();
+                try {
+                    context.initMDC();
 
-                ContentBuffer contentBuffer;
-                switch (value.getValueCase()) {
-                    case META:
-                        try {
-                            context.setWriteRequestMeta(value.getMeta());
-                        } catch (StatusException e) {
-                            responseObserver.onError(e);
-                        }
-                        break;
-                    case PROTOCOL_HEADER:
-                        contentBuffer = context.getRecordData(value.getProtocolHeader().getRecordNum()).getContentBuffer();
-                        if (contentBuffer.hasHeader()) {
-                            LOG.error("Header received twice");
-                            Status status = Status.INVALID_ARGUMENT.withDescription("Header received twice");
-                            responseObserver.onError(status.asException());
+                    ContentBuffer contentBuffer;
+                    switch (value.getValueCase()) {
+                        case META:
+                            try {
+                                context.setWriteRequestMeta(value.getMeta());
+                            } catch (StatusException e) {
+                                responseObserver.onError(e);
+                            }
                             break;
-                        }
-                        contentBuffer.setHeader(value.getProtocolHeader().getData());
-                        break;
-                    case PAYLOAD:
-                        contentBuffer = context.getRecordData(value.getPayload().getRecordNum()).getContentBuffer();
-                        contentBuffer.addPayload(value.getPayload().getData());
-                        break;
-                    case CANCEL:
-                        context.cancelSession(value.getCancel());
-                        break;
-                    default:
-                        break;
+                        case PROTOCOL_HEADER:
+                            contentBuffer = context.getRecordData(value.getProtocolHeader().getRecordNum()).getContentBuffer();
+                            if (contentBuffer.hasHeader()) {
+                                LOG.error("Header received twice");
+                                Status status = Status.INVALID_ARGUMENT.withDescription("Header received twice");
+                                responseObserver.onError(status.asException());
+                                break;
+                            }
+                            contentBuffer.setHeader(value.getProtocolHeader().getData());
+                            break;
+                        case PAYLOAD:
+                            contentBuffer = context.getRecordData(value.getPayload().getRecordNum()).getContentBuffer();
+                            contentBuffer.addPayload(value.getPayload().getData());
+                            break;
+                        case CANCEL:
+                            context.cancelSession(value.getCancel());
+                            break;
+                        default:
+                            break;
+                    }
+                } catch (Exception ex) {
+                    Status status = Status.UNKNOWN.withDescription(ex.toString());
+                    LOG.error(ex.getMessage(), ex);
+                    responseObserver.onError(status.asException());
                 }
             }
 
@@ -141,6 +147,11 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
                     context.validateSession();
                 } catch (StatusException e) {
                     responseObserver.onError(e);
+                    return;
+                } catch (Exception ex) {
+                    Status status = Status.UNKNOWN.withDescription(ex.toString());
+                    LOG.error(ex.getMessage(), ex);
+                    responseObserver.onError(status.asException());
                     return;
                 }
 

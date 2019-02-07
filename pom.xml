@@ -29,6 +29,8 @@
 
         <veidemann.version>0.3.3</veidemann.version>
         <veidemann.api.version>v1.0.0-beta3</veidemann.api.version>
+        <veidemann.commons.version>0.3.4</veidemann.commons.version>
+        <veidemann.rethinkdbadapter.version>0.3.4</veidemann.rethinkdbadapter.version>
         <org.apache.tika.version>1.20</org.apache.tika.version>
         <org.jwat.version>1.1.1</org.jwat.version>
         <log4j.version>2.7</log4j.version>
@@ -50,14 +52,14 @@
             <version>${veidemann.api.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.github.nlnwa.veidemann-harvester</groupId>
-            <artifactId>veidemann-dbadapter</artifactId>
-            <version>${veidemann.version}</version>
+            <groupId>com.github.nlnwa</groupId>
+            <artifactId>veidemann-rethinkdbadapter</artifactId>
+            <version>${veidemann.rethinkdbadapter.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.github.nlnwa.veidemann-harvester</groupId>
+            <groupId>com.github.nlnwa</groupId>
             <artifactId>veidemann-commons</artifactId>
-            <version>${veidemann.version}</version>
+            <version>${veidemann.commons.version}</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
