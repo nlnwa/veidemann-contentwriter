@@ -57,7 +57,7 @@ public class VeidemannWarcFileNaming implements WarcFileNaming {
         String dateStr = dateFormat.format(new Date());
 
         String filename = filePrefix + "-" + dateStr
-                + "-" + hostName
+                + "-" + hostName.replace("-", "_")
                 + "-" + String.format("%05d", sequenceNumber.getAndIncrement()) + extension;
         if (bCompressed) {
             filename += ".gz";

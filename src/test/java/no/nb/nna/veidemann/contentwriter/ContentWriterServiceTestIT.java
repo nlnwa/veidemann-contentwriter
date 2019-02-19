@@ -43,6 +43,8 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.jwat.warc.WarcRecord;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.text.ParseException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -122,6 +124,21 @@ public class ContentWriterServiceTestIT {
                         .hasVersion(1, 0)
                         .hasValidHeaders();
             });
+        });
+
+        wfs.listFiles().forEach(wf -> {
+            try (Stream<WarcRecord> stream = wf.getContent()) {
+                String fileName = wf.getName();
+                stream.filter(r -> r.header.warcTypeStr.equals(RT_WARCINFO)).forEach(r -> {
+                    try (Stream<String> lines = new BufferedReader(new InputStreamReader(r.getPayloadContent())).lines()) {
+                        assertThat(lines.filter(l -> l.startsWith("host: ")).map(l -> l.replace("host: ", "")))
+                                .allSatisfy(hostName -> {
+                                    assertThat(fileName.contains(hostName)).isFalse();
+                                    assertThat(fileName).contains(hostName.replace("-", "_"));
+                                });
+                    }
+                });
+            }
         });
     }
 
