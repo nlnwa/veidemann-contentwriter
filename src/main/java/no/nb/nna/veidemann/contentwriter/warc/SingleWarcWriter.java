@@ -92,7 +92,7 @@ public class SingleWarcWriter implements AutoCloseable {
                 record.header.addHeader(FN_WARC_REFERS_TO, Util.formatIdentifierAsUrn(recordData.getRevisitRef().getWarcId()));
                 if (!recordData.getRevisitRef().getTargetUri().isEmpty() && recordData.getRevisitRef().hasDate()) {
                     record.header.addHeader(FN_WARC_REFERS_TO_TARGET_URI,
-                            Util.formatIdentifierAsUrn(recordData.getRevisitRef().getTargetUri()));
+                            recordData.getRevisitRef().getTargetUri());
                     record.header.addHeader(FN_WARC_REFERS_TO_DATE,
                             Date.from(ProtoUtils.tsToOdt(recordData.getRevisitRef().getDate()).toInstant()), null);
                 }
