@@ -140,13 +140,18 @@ public class WriteSessionContext {
         if (rd.getRecordType() == RecordType.RESPONSE || rd.getRecordType() == RecordType.RESOURCE) {
             Optional<CrawledContent> isDuplicate = null;
             try {
+                String digest = rd.getContentBuffer().getPayloadDigest();
+                if (digest == null || digest.isEmpty()) {
+                    digest = rd.getContentBuffer().getBlockDigest();
+                }
+                CrawledContent cr = CrawledContent.newBuilder()
+                        .setDigest(digest + ":" + collection.getCollectionName(rd.getSubCollectionType()))
+                        .setWarcId(rd.getWarcId())
+                        .setTargetUri(writeRequestMeta.getTargetUri())
+                        .setDate(writeRequestMeta.getFetchTimeStamp())
+                        .build();
                 isDuplicate = dbAdapter
-                        .hasCrawledContent(CrawledContent.newBuilder()
-                                .setDigest(rd.getContentBuffer().getPayloadDigest() + ":" + collection.getCollectionName(rd.getSubCollectionType()))
-                                .setWarcId(rd.getWarcId())
-                                .setTargetUri(writeRequestMeta.getTargetUri())
-                                .setDate(writeRequestMeta.getFetchTimeStamp())
-                                .build());
+                        .hasCrawledContent(cr);
             } catch (DbException e) {
                 LOG.error("Failed checking for revisit, treating as new object", e);
             }
