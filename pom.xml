@@ -22,19 +22,18 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
         <docker.tag>latest</docker.tag>
-        <docker.java.image>openjdk:8-jdk-alpine</docker.java.image>
 
         <veidemann.version>0.3.3</veidemann.version>
-        <veidemann.api.version>v1.0.0-beta3</veidemann.api.version>
-        <veidemann.commons.version>0.3.4</veidemann.commons.version>
-        <veidemann.rethinkdbadapter.version>0.3.4</veidemann.rethinkdbadapter.version>
+        <veidemann.api.version>1.0.0-beta10</veidemann.api.version>
+        <veidemann.commons.version>0.3.11</veidemann.commons.version>
+        <veidemann.rethinkdbadapter.version>0.3.18</veidemann.rethinkdbadapter.version>
         <org.apache.tika.version>1.20</org.apache.tika.version>
         <org.jwat.version>1.1.1</org.jwat.version>
         <log4j.version>2.7</log4j.version>
-
+        <io.grpc.version>1.20.0</io.grpc.version>
         <rethinkdb.version>2.3.6</rethinkdb.version>
     </properties>
 
@@ -64,7 +63,7 @@
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-netty</artifactId>
-            <version>1.17.1</version>
+            <version>${io.grpc.version}</version>
         </dependency>
 
         <!-- ARC/WARC libraries -->
@@ -155,7 +154,7 @@
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
-            <version>2.13.0</version>
+            <version>2.27.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -164,42 +163,33 @@
         <pluginManagement>
             <plugins>
                 <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-failsafe-plugin</artifactId>
-                    <version>3.0.0-M3</version>
-                    <executions>
-                        <execution>
-                            <goals>
-                                <goal>integration-test</goal>
-                                <goal>verify</goal>
-                            </goals>
-                        </execution>
-                    </executions>
-                </plugin>
-                <plugin>
                     <groupId>io.fabric8</groupId>
                     <artifactId>docker-maven-plugin</artifactId>
-                    <version>0.28.0</version>
-                </plugin>
-                <plugin>
-                    <groupId>org.codehaus.mojo</groupId>
-                    <artifactId>appassembler-maven-plugin</artifactId>
-                    <version>2.0.0</version>
+                    <version>0.29.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-jar-plugin</artifactId>
                     <version>3.0.2</version>
                 </plugin>
+                <plugin>
+                    <groupId>com.google.cloud.tools</groupId>
+                    <artifactId>jib-maven-plugin</artifactId>
+                    <version>1.6.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>3.0.0-M3</version>
+                </plugin>
             </plugins>
         </pluginManagement>
-
         <plugins>
             <!-- Make version number available for application -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>3.0.2</version>
+
                 <configuration>
                     <archive>
                         <manifest>
@@ -208,22 +198,46 @@
                     </archive>
                 </configuration>
             </plugin>
-
-            <!-- Build Docker image -->
+            <plugin>
+                <groupId>com.google.cloud.tools</groupId>
+                <artifactId>jib-maven-plugin</artifactId>
+                <configuration>
+                    <to>
+                        <image>docker.io/norsknettarkiv/${project.artifactId}</image>
+                        <tags>
+                            <tag>${docker.tag}</tag>
+                        </tags>
+                        <auth>
+                            <username>${env.DOCKER_USERNAME}</username>
+                            <password>${env.DOCKER_PASSWORD}</password>
+                        </auth>
+                    </to>
+                    <container>
+                        <ports>
+                            <port>8080</port>
+                        </ports>
+                        <volumes>
+                            <volume>/workdir</volume>
+                            <volume>/warcs</volume>
+                        </volumes>
+                        <environment>
+                            <WORK_DIR>/workdir</WORK_DIR>
+                            <WARC_DIR>/warcs</WARC_DIR>
+                        </environment>
+                        <jvmFlags>
+                            <jvmFlag>-Dfile.encoding=UTF-8</jvmFlag>
+                        </jvmFlags>
+                    </container>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>io.fabric8</groupId>
                 <artifactId>docker-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>docker-build</id>
-                    </execution>
-                </executions>
                 <configuration>
                     <removeVolumes>true</removeVolumes>
                     <autoCreateCustomNetworks>true</autoCreateCustomNetworks>
                     <verbose>false</verbose>
                     <startParallel>false</startParallel>
-
                     <volumes>
                         <volume>
                             <name>rethink-data</name>
@@ -244,78 +258,6 @@
                         </volume>
                     </volumes>
                     <images>
-                        <image>
-                            <name>norsknettarkiv/${project.artifactId}</name>
-                            <alias>${project.artifactId}</alias>
-                            <build>
-                                <from>${docker.java.image}</from>
-                                <maintainer>National Library of Norway</maintainer>
-                                <tags>
-                                    <tag>${docker.tag}</tag>
-                                </tags>
-                                <optimise>true</optimise>
-                                <runCmds>
-                                    <run>mkdir /workdir</run>
-                                    <run>mkdir /warcs</run>
-                                </runCmds>
-                                <volumes>
-                                    <volume>/workdir</volume>
-                                    <volume>/warcs</volume>
-                                </volumes>
-                                <env>
-                                    <WORK_DIR>/workdir</WORK_DIR>
-                                    <WARC_DIR>/warcs</WARC_DIR>
-                                </env>
-                                <ports>
-                                    <port>8080</port>
-                                </ports>
-                                <cmd>
-                                    <exec>
-                                        <arg>/veidemann/bin/${project.artifactId}</arg>
-                                    </exec>
-                                </cmd>
-                                <assembly>
-                                    <targetDir>/veidemann</targetDir>
-
-                                    <inline>
-                                        <includeBaseDirectory>true</includeBaseDirectory>
-                                        <fileSets>
-                                            <fileSet>
-                                                <directory>target/appassembler/bin</directory>
-                                                <outputDirectory>bin</outputDirectory>
-                                                <includes>
-                                                    <include>${project.artifactId}</include>
-                                                </includes>
-                                                <fileMode>0755</fileMode>
-                                            </fileSet>
-                                            <fileSet>
-                                                <directory>target/appassembler/bin</directory>
-                                                <outputDirectory>bin</outputDirectory>
-                                                <excludes>
-                                                    <exclude>${project.artifactId}</exclude>
-                                                </excludes>
-                                                <fileMode>0644</fileMode>
-                                            </fileSet>
-                                            <fileSet>
-                                                <directory>target/appassembler</directory>
-                                                <outputDirectory>/</outputDirectory>
-                                                <excludes>
-                                                    <exclude>bin</exclude>
-                                                </excludes>
-                                            </fileSet>
-                                        </fileSets>
-                                        <files>
-                                            <file>
-                                                <source>LICENSE</source>
-                                                <outputDirectory></outputDirectory>
-                                                <fileMode>0644</fileMode>
-                                            </file>
-                                        </files>
-                                    </inline>
-                                </assembly>
-                            </build>
-                        </image>
-
                         <image>
                             <name>rethinkdb:${rethinkdb.version}</name>
                             <alias>db</alias>
@@ -339,7 +281,7 @@
                                 </log>
                                 <wait>
                                     <log>Server ready.*</log>
-                                    <time>40000</time>
+                                    <time>100000</time>
                                 </wait>
                             </run>
                         </image>
@@ -441,6 +383,20 @@
                     </images>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <db.host>${db.host}</db.host>
+                        <db.port>${db.port}</db.port>
+                        <contentwriter.host>${contentwriter.host}</contentwriter.host>
+                        <contentwriter.port>${contentwriter.port}</contentwriter.port>
+                        <contentexplorer.host>${contentexplorer.host}</contentexplorer.host>
+                        <contentexplorer.port>${contentexplorer.port}</contentexplorer.port>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
@@ -449,45 +405,31 @@
             <id>docker-build</id>
             <build>
                 <plugins>
-                    <!-- Create assembly with startup scripts and dependencies -->
                     <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>appassembler-maven-plugin</artifactId>
-                        <configuration>
-                            <licenseHeaderFile>${basedir}/src/main/etc/license-header.txt</licenseHeaderFile>
-                            <programs>
-                                <program>
-                                    <mainClass>no.nb.nna.veidemann.contentwriter.Main</mainClass>
-                                    <id>${project.artifactId}</id>
-                                </program>
-                            </programs>
-                            <binFolder>bin</binFolder>
-                            <repositoryName>lib</repositoryName>
-                            <repositoryLayout>flat</repositoryLayout>
-                            <configurationDirectory>config</configurationDirectory>
-                            <endorsedDir>plugins</endorsedDir>
-                            <preAssembleDirectory>src/main/distfiles</preAssembleDirectory>
-                            <extraJvmArguments>-Dconfig.file=@BASEDIR@/config/application.conf
-                                -XX:+UnlockExperimentalVMOptions -XX:+UseCGroupMemoryLimitForHeap
-                            </extraJvmArguments>
-                        </configuration>
+                        <groupId>com.google.cloud.tools</groupId>
+                        <artifactId>jib-maven-plugin</artifactId>
                         <executions>
                             <execution>
                                 <phase>package</phase>
                                 <goals>
-                                    <goal>assemble</goal>
+                                    <goal>dockerBuild</goal>
                                 </goals>
                             </execution>
                         </executions>
                     </plugin>
+                </plugins>
+            </build>
+        </profile>
 
-                    <!-- Build Docker image -->
+        <profile>
+            <id>docker-build-and-push</id>
+            <build>
+                <plugins>
                     <plugin>
-                        <groupId>io.fabric8</groupId>
-                        <artifactId>docker-maven-plugin</artifactId>
+                        <groupId>com.google.cloud.tools</groupId>
+                        <artifactId>jib-maven-plugin</artifactId>
                         <executions>
                             <execution>
-                                <id>docker-build</id>
                                 <phase>package</phase>
                                 <goals>
                                     <goal>build</goal>
@@ -541,16 +483,6 @@
                                 </goals>
                             </execution>
                         </executions>
-                        <configuration>
-                            <systemPropertyVariables>
-                                <db.host>${db.host}</db.host>
-                                <db.port>${db.port}</db.port>
-                                <contentwriter.host>${contentwriter.host}</contentwriter.host>
-                                <contentwriter.port>${contentwriter.port}</contentwriter.port>
-                                <contentexplorer.host>${contentexplorer.host}</contentexplorer.host>
-                                <contentexplorer.port>${contentexplorer.port}</contentexplorer.port>
-                            </systemPropertyVariables>
-                        </configuration>
                     </plugin>
                 </plugins>
             </build>
