@@ -3,3 +3,11 @@
 [![Build Status](https://travis-ci.org/nlnwa/veidemann-contentwriter.svg?branch=master)](https://travis-ci.org/nlnwa/veidemann-contentwriter)
 
 # veidemann-contentwriter
+
+## Build container
+
+    mvn package -Pdocker-build
+
+## Run integration tests
+
+    mvn verify -Pintegration-tests
