@@ -203,7 +203,7 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
         };
     }
 
-    private URI writeRecord(final SingleWarcWriter warcWriter, RecordData recordData) throws StatusException {
+    public URI writeRecord(final SingleWarcWriter warcWriter, RecordData recordData) throws StatusException {
         ContentBuffer contentBuffer = recordData.getContentBuffer();
         long size = 0L;
         URI ref;
