@@ -59,10 +59,13 @@ public class ContentWriter {
      */
     public ContentWriter start() {
         try (DbService db = DbService.configure(SETTINGS);
-
              WarcCollectionRegistry warcCollectionRegistry = new WarcCollectionRegistry();
              TextExtractor textExtractor = new TextExtractor();
-             ApiServer apiServer = new ApiServer(SETTINGS.getApiPort(), warcCollectionRegistry, textExtractor).start();) {
+             ApiServer apiServer = new ApiServer(SETTINGS.getApiPort(), SETTINGS.getTerminationGracePeriodSeconds(), warcCollectionRegistry, textExtractor);) {
+
+            registerShutdownHook();
+
+            apiServer.start();
 
             LOG.info("Veidemann Content Writer (v. {}) started",
                     ContentWriter.class.getPackage().getImplementationVersion());
@@ -73,11 +76,29 @@ public class ContentWriter {
                 // Interrupted, shut down
             }
         } catch (ConfigException | DbException ex) {
-            System.err.println("Configuration error: " + ex.getLocalizedMessage());
+            LOG.error("Configuration error: {}", ex.getLocalizedMessage());
             System.exit(1);
         }
 
         return this;
+    }
+
+    private void registerShutdownHook() {
+        Thread mainThread = Thread.currentThread();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            // Use stderr here since the logger may have been reset by its JVM shutdown hook.
+            System.err.println("*** shutting down since JVM is shutting down");
+
+            mainThread.interrupt();
+            try {
+                mainThread.join();
+            } catch (InterruptedException e) {
+                //
+            }
+            System.err.println("*** gracefully shut down");
+
+        }));
     }
 
     /**

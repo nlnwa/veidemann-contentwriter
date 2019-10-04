@@ -47,7 +47,8 @@ public class WarcWriterPool extends Pool<SingleWarcWriter> {
                     try {
                         singleWarcWriter.close();
                     } catch (Exception e) {
-                        LOG.error("Failed closing collection " + name, e);
+                        // Use stderr here since the logger may have been reset by its JVM shutdown hook.
+                        System.err.println("Failed closing collection " + name + ": " + e.getLocalizedMessage());
                     }
                 });
 
