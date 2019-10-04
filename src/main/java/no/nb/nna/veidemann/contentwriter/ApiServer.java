@@ -27,6 +27,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -34,13 +37,16 @@ import java.io.UncheckedIOException;
 public class ApiServer implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(ApiServer.class);
     private final Server server;
-    private final WarcCollectionRegistry warcCollectionRegistry;
+    private final ExecutorService threadPool;
+    private int shutdownTimeoutSeconds = 60;
+
 
     /**
      * Construct a new REST API server.
      */
-    public ApiServer(int port, WarcCollectionRegistry warcCollectionRegistry, TextExtractor textExtractor) {
+    public ApiServer(int port, int shutdownTimeoutSeconds, WarcCollectionRegistry warcCollectionRegistry, TextExtractor textExtractor) {
         this(ServerBuilder.forPort(port), warcCollectionRegistry, textExtractor);
+        this.shutdownTimeoutSeconds = shutdownTimeoutSeconds;
     }
 
     public ApiServer(ServerBuilder<?> serverBuilder, WarcCollectionRegistry warcCollectionRegistry, TextExtractor textExtractor) {
@@ -50,8 +56,12 @@ public class ApiServer implements AutoCloseable {
                         ServerTracingInterceptor.ServerRequestAttribute.METHOD_TYPE)
                 .build();
 
-        this.warcCollectionRegistry = warcCollectionRegistry;
-        server = serverBuilder.addService(tracingInterceptor.intercept(new ContentWriterService(warcCollectionRegistry, textExtractor))).build();
+        serverBuilder.intercept(tracingInterceptor);
+
+        threadPool = Executors.newCachedThreadPool();
+        serverBuilder.executor(threadPool);
+
+        server = serverBuilder.addService(new ContentWriterService(warcCollectionRegistry, textExtractor)).build();
     }
 
     public ApiServer start() {
@@ -60,45 +70,28 @@ public class ApiServer implements AutoCloseable {
 
             LOG.info("Content Writer api listening on {}", server.getPort());
 
-            Runtime.getRuntime().addShutdownHook(new Thread() {
-                @Override
-                public void run() {
-                    // Use stderr here since the logger may have been reset by its JVM shutdown hook.
-                    System.err.println("*** shutting down gRPC server since JVM is shutting down");
-                    ApiServer.this.close();
-                }
-
-            });
-
             return this;
         } catch (IOException ex) {
-            close();
             throw new UncheckedIOException(ex);
         }
     }
 
     @Override
     public void close() {
-        if (warcCollectionRegistry != null) {
-            warcCollectionRegistry.close();
+        long startTime = System.currentTimeMillis();
+        server.shutdown();
+        try {
+            server.awaitTermination();
+        } catch (InterruptedException e) {
+            server.shutdownNow();
         }
-        if (server != null) {
-            server.shutdown();
+        threadPool.shutdown();
+        long timeoutSeconds = shutdownTimeoutSeconds - ((System.currentTimeMillis() - startTime) / 1000);
+        try {
+            threadPool.awaitTermination(timeoutSeconds, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            threadPool.shutdownNow();
         }
-        System.err.println("*** server shut down");
     }
 
-    /**
-     * Await termination on the main thread since the grpc library uses daemon threads.
-     */
-    public void blockUntilShutdown() {
-        if (server != null) {
-            try {
-                server.awaitTermination();
-            } catch (InterruptedException ex) {
-                close();
-                throw new RuntimeException(ex);
-            }
-        }
-    }
 }

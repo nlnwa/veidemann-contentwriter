@@ -49,8 +49,8 @@ public class WriteSessionContext {
     //    private final Map<Integer, ContentBuffer> contentBuffers = new HashMap<>();
     private final Map<Integer, RecordData> recordDataMap = new HashMap<>();
 
-    private WriteRequestMeta.Builder writeRequestMeta;
-    private ConfigObject collectionConfig;
+    WriteRequestMeta.Builder writeRequestMeta;
+    ConfigObject collectionConfig;
     private boolean canceled = false;
 
     public RecordData getRecordData(Integer recordNum) {

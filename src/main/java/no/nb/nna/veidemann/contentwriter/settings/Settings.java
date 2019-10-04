@@ -15,7 +15,6 @@
  */
 package no.nb.nna.veidemann.contentwriter.settings;
 
-import com.typesafe.config.ConfigMemorySize;
 import no.nb.nna.veidemann.commons.settings.CommonSettings;
 
 /**
@@ -32,6 +31,8 @@ public class Settings extends CommonSettings {
     private int warcWriterPoolSize;
 
     private String workDir;
+
+    private int terminationGracePeriodSeconds;
 
     public int getApiPort() {
         return apiPort;
@@ -73,4 +74,11 @@ public class Settings extends CommonSettings {
         this.workDir = workDir;
     }
 
+    public int getTerminationGracePeriodSeconds() {
+        return terminationGracePeriodSeconds;
+    }
+
+    public void setTerminationGracePeriodSeconds(int terminationGracePeriodSeconds) {
+        this.terminationGracePeriodSeconds = terminationGracePeriodSeconds;
+    }
 }
