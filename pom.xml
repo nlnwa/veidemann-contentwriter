@@ -222,13 +222,6 @@
                 <configuration>
                     <to>
                         <image>docker.io/norsknettarkiv/${project.artifactId}</image>
-                        <tags>
-                            <tag>${docker.tag}</tag>
-                        </tags>
-                        <auth>
-                            <username>${docker.username}</username>
-                            <password>${docker.password}</password>
-                        </auth>
                     </to>
                     <container>
                         <ports>
@@ -259,6 +252,13 @@
                     <plugin>
                         <groupId>com.google.cloud.tools</groupId>
                         <artifactId>jib-maven-plugin</artifactId>
+                        <configuration>
+                            <to>
+                                <tags>
+                                    <tag>${docker.tag}</tag>
+                                </tags>
+                            </to>
+                        </configuration>
                         <executions>
                             <execution>
                                 <phase>package</phase>
@@ -287,6 +287,17 @@
                                 </goals>
                             </execution>
                         </executions>
+                        <configuration>
+                            <to>
+                                <tags>
+                                    <tag>${docker.tag}</tag>
+                                </tags>
+                                <auth>
+                                    <username>${docker.username}</username>
+                                    <password>${docker.password}</password>
+                                </auth>
+                            </to>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>

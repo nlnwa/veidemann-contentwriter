@@ -1,0 +1,25 @@
+kind: Kustomization
+apiVersion: kustomize.config.k8s.io/v1beta1
+
+commonLabels:
+  app.kubernetes.io/name: veidemann-contentwriter
+
+resources:
+  - deployment.yaml
+  - service.yaml
+
+#vars:
+#  - name: RETHINKDB_HOST
+#    objref:
+#      kind: Service
+#      name: rethinkdb-proxy
+#      apiVersion: v1
+#    fieldref:
+#      fieldpath: metadata.name
+#  - name: RETHINKDB_PORT
+#    objref:
+#      kind: Service
+#      name: rethinkdb-proxy
+#      apiVersion: v1
+#    fieldref:
+#      fieldpath: spec.ports[0].port

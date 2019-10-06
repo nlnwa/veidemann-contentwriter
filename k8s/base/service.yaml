@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: veidemann-contentwriter
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8082
+      targetPort: grpc
+      name: grpc

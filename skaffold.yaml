@@ -1,0 +1,13 @@
+apiVersion: skaffold/v1beta15
+kind: Config
+
+build:
+  artifacts:
+    - image: docker.io/norsknettarkiv/veidemann-contentwriter
+      jib: {}
+  local:
+    push: false
+
+deploy:
+  kustomize:
+    path: ./k8s/base
