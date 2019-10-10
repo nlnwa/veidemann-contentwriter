@@ -9,11 +9,11 @@ jdk:
 notifications:
   email: false
 
-after_success: bash .travis/build_script.sh
+script: ./scripts/build.sh
 
 deploy:
+  skip_cleanup: true
   provider: script
-  script: bash .travis/push_script.sh $TRAVIS_TAG
+  script: .travis/push.sh $TRAVIS_TAG
   on:
     tags: true
-    branch: master
