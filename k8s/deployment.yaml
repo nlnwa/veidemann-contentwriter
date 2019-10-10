@@ -1,3 +1,4 @@
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,7 +15,7 @@ spec:
             claimName: veidemann-warcs
         - name: log4j-config
           configMap:
-            name: release-name-veidemann
+            name: dev-veidemann
             items:
               - key: log4j2.xml
                 path: log4j2.xml
@@ -35,7 +36,7 @@ spec:
               subPath: log4j2.xml
           envFrom:
             - secretRef:
-                name: release-name-veidemann-rethinkdb-env
+                name: veidemann-rethinkdb-env
                 optional: false
           env:
             - name: NODE_NAME
@@ -43,9 +44,9 @@ spec:
                 fieldRef:
                   fieldPath: status.hostIP
             - name: DB_HOST
-              value: $(RETHINKDB_HOST)
+              value: "$(RETHINKDB_PROXY_SERVICE_HOST)"
             - name: DB_PORT
-              value: "28015"
+              value: "$(RETHINKDB_PROXY_SERVICE_PORT)"
             - name: DB_NAME
               value: "veidemann"
             - name: HOST_NAME

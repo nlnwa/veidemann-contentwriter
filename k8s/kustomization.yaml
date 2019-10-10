@@ -8,15 +8,20 @@ resources:
   - deployment.yaml
   - service.yaml
 
+images:
+  - name: veidemann-contentwriter
+    newName: norsknettarkiv/veidemann-contentwriter
+
+
 #vars:
-#  - name: RETHINKDB_HOST
+#  - name: RETHINKDB_PROXY_SERVICE_HOST
 #    objref:
 #      kind: Service
 #      name: rethinkdb-proxy
 #      apiVersion: v1
 #    fieldref:
 #      fieldpath: metadata.name
-#  - name: RETHINKDB_PORT
+#  - name: RETHINKDB_PROXY_SERVICE_PORT
 #    objref:
 #      kind: Service
 #      name: rethinkdb-proxy

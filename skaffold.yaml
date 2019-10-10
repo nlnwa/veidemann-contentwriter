@@ -10,4 +10,4 @@ build:
 
 deploy:
   kustomize:
-    path: ./k8s/base
+    path: ./k8s
