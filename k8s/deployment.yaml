@@ -21,7 +21,7 @@ spec:
                 path: log4j2.xml
       containers:
         - name: veidemann-contentwriter
-          image: veidemann-contentwriter:latest
+          image: norsknettarkiv/veidemann-contentwriter:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: grpc
@@ -36,7 +36,7 @@ spec:
               subPath: log4j2.xml
           envFrom:
             - secretRef:
-                name: veidemann-rethinkdb-env
+                name: dev-veidemann-rethinkdb-env
                 optional: false
           env:
             - name: NODE_NAME
@@ -44,9 +44,9 @@ spec:
                 fieldRef:
                   fieldPath: status.hostIP
             - name: DB_HOST
-              value: "$(RETHINKDB_PROXY_SERVICE_HOST)"
+              value: "$(DEV_DB_RETHINKDB_PROXY_SERVICE_HOST)"
             - name: DB_PORT
-              value: "$(RETHINKDB_PROXY_SERVICE_PORT)"
+              value: "$(DEV_DB_RETHINKDB_PROXY_SERVICE_PORT)"
             - name: DB_NAME
               value: "veidemann"
             - name: HOST_NAME

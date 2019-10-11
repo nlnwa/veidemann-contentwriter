@@ -3,11 +3,11 @@ kind: Config
 
 build:
   artifacts:
-    - image: docker.io/norsknettarkiv/veidemann-contentwriter
+    - image: veidemann-contentwriter
       jib: {}
   local:
     push: false
 
 deploy:
   kustomize:
-    path: ./k8s
+    path: k8s

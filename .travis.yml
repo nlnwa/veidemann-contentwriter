@@ -9,11 +9,11 @@ jdk:
 notifications:
   email: false
 
-script: ./scripts/build.sh
+script: scripts/build.sh
 
 deploy:
   skip_cleanup: true
   provider: script
-  script: .travis/push.sh $TRAVIS_TAG
+  script: scripts/push.sh $TRAVIS_TAG 'docker.io/norsknettarkiv/veidemann-contentwriter'
   on:
     tags: true

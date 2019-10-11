@@ -24,6 +24,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
+        <docker.image>${project.artifactId}</docker.image>
         <docker.tag>latest</docker.tag>
 
         <veidemann.version>0.3.3</veidemann.version>
@@ -221,7 +222,7 @@
                 <artifactId>jib-maven-plugin</artifactId>
                 <configuration>
                     <to>
-                        <image>docker.io/norsknettarkiv/${project.artifactId}</image>
+                        <image>${docker.image}</image>
                     </to>
                     <container>
                         <ports>
@@ -252,13 +253,6 @@
                     <plugin>
                         <groupId>com.google.cloud.tools</groupId>
                         <artifactId>jib-maven-plugin</artifactId>
-                        <configuration>
-                            <to>
-                                <tags>
-                                    <tag>${docker.tag}</tag>
-                                </tags>
-                            </to>
-                        </configuration>
                         <executions>
                             <execution>
                                 <phase>package</phase>
@@ -307,6 +301,23 @@
             <id>integration-tests</id>
             <build>
                 <plugins>
+                    <plugin>
+                        <groupId>com.google.cloud.tools</groupId>
+                        <artifactId>jib-maven-plugin</artifactId>
+                        <configuration>
+                            <to>
+                                <image>norsknettarkiv/veidemann-contentwriter</image>
+                            </to>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>dockerBuild</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
                     <plugin>
                         <groupId>io.fabric8</groupId>
                         <artifactId>docker-maven-plugin</artifactId>

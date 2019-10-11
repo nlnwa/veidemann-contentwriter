@@ -2,6 +2,4 @@
 
 set -ev
 
-DOCKER_TAG=${DOCKER_TAG:-latest}
-
-mvn -B -Pdocker-build-and-push -Ddocker.tag="${DOCKER_TAG}" package
+mvn -B -Pdocker-build-and-push -Ddocker.tag="${0:-latest}" -Ddocker.image="${1:-veidemann-contentwriter}"
