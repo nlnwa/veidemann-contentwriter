@@ -2,4 +2,4 @@
 
 set -ev
 
-mvn -B -Pdocker-build-and-push -Ddocker.tag="${0:-latest}" -Ddocker.image="${1:-veidemann-contentwriter}"
+mvn -B -Pdocker-build-and-push -Ddocker.tag="${1:-latest}" -Ddocker.image="${2:-veidemann-contentwriter}"
