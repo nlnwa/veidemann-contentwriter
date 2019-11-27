@@ -30,7 +30,7 @@
         <veidemann.api.version>1.0.0-beta10</veidemann.api.version>
         <veidemann.commons.version>0.3.11</veidemann.commons.version>
         <veidemann.rethinkdbadapter.version>0.3.18</veidemann.rethinkdbadapter.version>
-        <org.apache.tika.version>1.20</org.apache.tika.version>
+        <org.apache.tika.version>1.22</org.apache.tika.version>
         <org.jwat.version>1.1.1</org.jwat.version>
         <log4j.version>2.7</log4j.version>
         <io.grpc.version>1.20.0</io.grpc.version>
