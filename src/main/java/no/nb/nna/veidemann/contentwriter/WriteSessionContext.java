@@ -25,7 +25,7 @@ import no.nb.nna.veidemann.api.contentwriter.v1.CrawledContent;
 import no.nb.nna.veidemann.api.contentwriter.v1.RecordType;
 import no.nb.nna.veidemann.api.contentwriter.v1.WriteRequestMeta;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
-import no.nb.nna.veidemann.commons.db.DbAdapter;
+import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
 import no.nb.nna.veidemann.commons.db.DbException;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.contentwriter.warc.WarcCollection;
@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
 public class WriteSessionContext {
     private static final Logger LOG = LoggerFactory.getLogger(WriteSessionContext.class);
     private static final ConfigAdapter config = DbService.getInstance().getConfigAdapter();
-    private static final DbAdapter dbAdapter = DbService.getInstance().getDbAdapter();
+    private static final ExecutionsAdapter dbAdapter = DbService.getInstance().getExecutionsAdapter();
 
     //    private final Map<Integer, ContentBuffer> contentBuffers = new HashMap<>();
     private final Map<Integer, RecordData> recordDataMap = new HashMap<>();

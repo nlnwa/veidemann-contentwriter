@@ -17,7 +17,7 @@ package no.nb.nna.veidemann.contentwriter.text;
 
 import java.util.regex.Pattern;
 
-import no.nb.nna.veidemann.api.MessagesProto.ExtractedText;
+import no.nb.nna.veidemann.api.commons.v1.ExtractedText;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.sax.ContentHandlerDecorator;
 import org.apache.tika.sax.WriteOutContentHandler;
