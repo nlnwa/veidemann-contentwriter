@@ -20,7 +20,7 @@ import no.nb.nna.veidemann.api.config.v1.Collection;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
 import no.nb.nna.veidemann.api.contentwriter.v1.RecordType;
 import no.nb.nna.veidemann.api.contentwriter.v1.WriteRequestMeta;
-import no.nb.nna.veidemann.commons.db.DbAdapter;
+import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.db.DbServiceSPI;
 import no.nb.nna.veidemann.contentwriter.ContentBuffer;
@@ -119,7 +119,7 @@ public class SingleWarcWriterTest {
     @Test
     public void testWrite() throws Exception {
         DbServiceSPI dbProviderMock = mock(DbServiceSPI.class);
-        when(dbProviderMock.getDbAdapter()).thenReturn(mock(DbAdapter.class));
+        when(dbProviderMock.getExecutionsAdapter()).thenReturn(mock(ExecutionsAdapter.class));
         DbService.configure(dbProviderMock);
 
         final File targetDir = temporaryFolder.getRoot();

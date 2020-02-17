@@ -27,9 +27,9 @@
         <docker.tag>latest</docker.tag>
 
         <veidemann.version>0.3.3</veidemann.version>
-        <veidemann.api.version>1.0.0-beta10</veidemann.api.version>
-        <veidemann.commons.version>0.3.11</veidemann.commons.version>
-        <veidemann.rethinkdbadapter.version>0.3.18</veidemann.rethinkdbadapter.version>
+        <veidemann.api.version>1.0.0-beta12</veidemann.api.version>
+        <veidemann.commons.version>0.4.1</veidemann.commons.version>
+        <veidemann.rethinkdbadapter.version>0.4.3</veidemann.rethinkdbadapter.version>
         <org.apache.tika.version>1.22</org.apache.tika.version>
         <org.jwat.version>1.1.1</org.jwat.version>
         <log4j.version>2.7</log4j.version>
@@ -64,11 +64,6 @@
             <groupId>com.github.nlnwa</groupId>
             <artifactId>veidemann-commons</artifactId>
             <version>${veidemann.commons.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.grpc</groupId>
-            <artifactId>grpc-netty</artifactId>
-            <version>${io.grpc.version}</version>
         </dependency>
 
         <!-- ARC/WARC libraries -->

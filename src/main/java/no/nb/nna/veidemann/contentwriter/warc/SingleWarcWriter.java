@@ -202,7 +202,7 @@ public class SingleWarcWriter implements AutoCloseable {
                     .setRecordType(RecordType.WARCINFO)
                     .setStorageRef(ref.toString())
                     .build();
-            DbService.getInstance().getDbAdapter().saveStorageRef(storageRef);
+            DbService.getInstance().getExecutionsAdapter().saveStorageRef(storageRef);
         } catch (DbException e) {
             throw new IOException(e);
         } catch (URISyntaxException e) {

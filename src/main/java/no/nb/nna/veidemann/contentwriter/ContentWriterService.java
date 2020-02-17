@@ -26,7 +26,7 @@ import no.nb.nna.veidemann.api.contentwriter.v1.WriteReply;
 import no.nb.nna.veidemann.api.contentwriter.v1.WriteRequest;
 import no.nb.nna.veidemann.api.contentwriter.v1.WriteResponseMeta;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
-import no.nb.nna.veidemann.commons.db.DbAdapter;
+import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.contentwriter.WriteSessionContext.RecordData;
 import no.nb.nna.veidemann.contentwriter.text.TextExtractor;
@@ -58,7 +58,7 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
 
     static final byte[] CRLF = {CR, LF};
 
-    private final DbAdapter db;
+    private final ExecutionsAdapter db;
 
     private final ConfigAdapter config;
 
@@ -67,7 +67,7 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
     private final TextExtractor textExtractor;
 
     public ContentWriterService(WarcCollectionRegistry warcCollectionRegistry, TextExtractor textExtractor) {
-        this.db = DbService.getInstance().getDbAdapter();
+        this.db = DbService.getInstance().getExecutionsAdapter();
         this.config = DbService.getInstance().getConfigAdapter();
         this.warcCollectionRegistry = warcCollectionRegistry;
         this.textExtractor = textExtractor;

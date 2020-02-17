@@ -15,7 +15,7 @@
  */
 package no.nb.nna.veidemann.contentwriter.text;
 
-import no.nb.nna.veidemann.commons.db.DbAdapter;
+import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
 import no.nb.nna.veidemann.commons.db.DbException;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.metadata.Metadata;
@@ -36,7 +36,7 @@ import java.io.InputStream;
 public class TextExtractor implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(TextExtractor.class);
 
-    public void analyze(String warcId, String targetUri, String contentType, int responseCode, InputStream in, DbAdapter db) throws IOException {
+    public void analyze(String warcId, String targetUri, String contentType, int responseCode, InputStream in, ExecutionsAdapter db) throws IOException {
         MDC.put("uri", targetUri);
 
         if (shouldParse(targetUri, contentType, responseCode)) {
