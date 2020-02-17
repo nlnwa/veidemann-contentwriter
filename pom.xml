@@ -29,7 +29,7 @@
         <veidemann.version>0.3.3</veidemann.version>
         <veidemann.api.version>1.0.0-beta12</veidemann.api.version>
         <veidemann.commons.version>0.4.1</veidemann.commons.version>
-        <veidemann.rethinkdbadapter.version>0.4.3</veidemann.rethinkdbadapter.version>
+        <veidemann.rethinkdbadapter.version>0.4.4</veidemann.rethinkdbadapter.version>
         <org.apache.tika.version>1.22</org.apache.tika.version>
         <org.jwat.version>1.1.1</org.jwat.version>
         <log4j.version>2.7</log4j.version>
