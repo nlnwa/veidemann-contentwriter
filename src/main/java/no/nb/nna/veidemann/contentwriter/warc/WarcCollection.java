@@ -36,7 +36,6 @@ import java.nio.file.Paths;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.EnumMap;
-import java.util.Iterator;
 import java.util.Map;
 
 public class WarcCollection implements AutoCloseable {
@@ -50,9 +49,9 @@ public class WarcCollection implements AutoCloseable {
     final ConfigObject config;
     final WarcWriterPool warcWriterPool;
     final Map<SubCollectionType, WarcWriterPool> subCollections;
-    String filePrefix;
-    String currentFileRotationKey;
-    Settings settings = ContentWriter.getSettings();
+    final String filePrefix;
+    final String currentFileRotationKey;
+    final Settings settings = ContentWriter.getSettings();
 
     public WarcCollection(ConfigObject config) {
 
@@ -89,11 +88,7 @@ public class WarcCollection implements AutoCloseable {
     }
 
     public String getCollectionName(SubCollectionType subType) {
-        if (subCollections.containsKey(subType)) {
-            return subCollections.get(subType).getName();
-        } else {
-            return warcWriterPool.getName();
-        }
+        return subCollections.getOrDefault(subType, warcWriterPool).getName();
     }
 
     public boolean shouldFlushFiles(ConfigObject config, OffsetDateTime timestamp) {
@@ -170,8 +165,7 @@ public class WarcCollection implements AutoCloseable {
     public void deleteFiles() throws IOException {
         Path dir = Paths.get(settings.getWarcDir());
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, warcWriterPool.getName() + "*.warc*")) {
-            for (Iterator<Path> it = stream.iterator(); it.hasNext(); ) {
-                Path path = it.next();
+            for (Path path : stream) {
                 LOG.info("Deleting " + path);
                 Files.delete(path);
             }
@@ -180,7 +174,7 @@ public class WarcCollection implements AutoCloseable {
 
     public class Instance implements AutoCloseable {
         Lease<SingleWarcWriter> warcWriterLease;
-        Map<SubCollectionType, Lease<SingleWarcWriter>> subCollectionWarcWriterLeases =
+        final Map<SubCollectionType, Lease<SingleWarcWriter>> subCollectionWarcWriterLeases =
                 new EnumMap<>(SubCollectionType.class);
 
         public SingleWarcWriter getWarcWriter(SubCollectionType subType) {

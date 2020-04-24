@@ -33,28 +33,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 public class WriteSessionContext {
     private static final Logger LOG = LoggerFactory.getLogger(WriteSessionContext.class);
     private static final ConfigAdapter config = DbService.getInstance().getConfigAdapter();
-    private static final ExecutionsAdapter dbAdapter = DbService.getInstance().getExecutionsAdapter();
+    private static final ExecutionsAdapter executionsAdapter = DbService.getInstance().getExecutionsAdapter();
 
     //    private final Map<Integer, ContentBuffer> contentBuffers = new HashMap<>();
-    private final Map<Integer, RecordData> recordDataMap = new HashMap<>();
+    final Map<Integer, RecordData> recordDataMap = new HashMap<>();
 
     WriteRequestMeta.Builder writeRequestMeta;
     ConfigObject collectionConfig;
     private boolean canceled = false;
 
     public RecordData getRecordData(Integer recordNum) {
-        return recordDataMap.computeIfAbsent(recordNum, n -> new RecordData(n));
+        return recordDataMap.computeIfAbsent(recordNum, RecordData::new);
     }
 
     public void initMDC() {
@@ -138,7 +134,7 @@ public class WriteSessionContext {
     public void detectRevisit(final Integer recordNum, final WarcCollection collection) {
         RecordData rd = getRecordData(recordNum);
         if (rd.getRecordType() == RecordType.RESPONSE || rd.getRecordType() == RecordType.RESOURCE) {
-            Optional<CrawledContent> isDuplicate = null;
+            Optional<CrawledContent> isDuplicate = Optional.empty();
             try {
                 String digest = rd.getContentBuffer().getPayloadDigest();
                 if (digest == null || digest.isEmpty()) {
@@ -150,7 +146,7 @@ public class WriteSessionContext {
                         .setTargetUri(writeRequestMeta.getTargetUri())
                         .setDate(writeRequestMeta.getFetchTimeStamp())
                         .build();
-                isDuplicate = dbAdapter
+                isDuplicate = executionsAdapter
                         .hasCrawledContent(cr);
             } catch (DbException e) {
                 LOG.error("Failed checking for revisit, treating as new object", e);
@@ -245,7 +241,7 @@ public class WriteSessionContext {
             List<String> ids = recordDataMap.values().stream()
                     .map(cb -> cb.getContentBuffer().getWarcId())
                     .collect(Collectors.toList());
-            ids.addAll(getRecordData(recordNum).getRecordMeta().getWarcConcurrentToList());
+            ids.addAll(getRecordMeta().getWarcConcurrentToList());
             return ids;
         }
 

@@ -22,7 +22,6 @@ import io.grpc.inprocess.InProcessServerBuilder;
 import no.nb.nna.veidemann.commons.client.ContentWriterClient;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.db.DbServiceSPI;
-import no.nb.nna.veidemann.contentwriter.text.TextExtractor;
 import no.nb.nna.veidemann.contentwriter.warc.SingleWarcWriter;
 import no.nb.nna.veidemann.contentwriter.warc.WarcCollectionRegistry;
 import org.junit.Rule;
@@ -49,11 +48,10 @@ public class ContentwriterServiceTest {
         DbService.configure(dbProviderMock);
         WarcCollectionRegistry warcCollectionRegistry = mock(WarcCollectionRegistry.class);
         SingleWarcWriter singleWarcWriterMock = mock(SingleWarcWriter.class);
-        TextExtractor textExtractorMock = mock(TextExtractor.class);
 
         InProcessServerBuilder inProcessServerBuilder = InProcessServerBuilder.forName(uniqueServerName).directExecutor();
         ManagedChannelBuilder inProcessChannelBuilder = InProcessChannelBuilder.forName(uniqueServerName).directExecutor();
-        try (ApiServer inProcessServer = new ApiServer(inProcessServerBuilder, warcCollectionRegistry, textExtractorMock).start();
+        try (ApiServer inProcessServer = new ApiServer(inProcessServerBuilder, warcCollectionRegistry).start();
              ContentWriterClient client = new ContentWriterClient(inProcessChannelBuilder);) {
 
 //            when(warcWriterPoolMock.borrow()).thenReturn(pooledWarcWriterMock);
