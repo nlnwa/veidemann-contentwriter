@@ -20,7 +20,6 @@ import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.opentracing.contrib.ServerTracingInterceptor;
 import io.opentracing.util.GlobalTracer;
-import no.nb.nna.veidemann.contentwriter.text.TextExtractor;
 import no.nb.nna.veidemann.contentwriter.warc.WarcCollectionRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,12 +43,12 @@ public class ApiServer implements AutoCloseable {
     /**
      * Construct a new REST API server.
      */
-    public ApiServer(int port, int shutdownTimeoutSeconds, WarcCollectionRegistry warcCollectionRegistry, TextExtractor textExtractor) {
-        this(ServerBuilder.forPort(port), warcCollectionRegistry, textExtractor);
+    public ApiServer(int port, int shutdownTimeoutSeconds, WarcCollectionRegistry warcCollectionRegistry) {
+        this(ServerBuilder.forPort(port), warcCollectionRegistry);
         this.shutdownTimeoutSeconds = shutdownTimeoutSeconds;
     }
 
-    public ApiServer(ServerBuilder<?> serverBuilder, WarcCollectionRegistry warcCollectionRegistry, TextExtractor textExtractor) {
+    public ApiServer(ServerBuilder<?> serverBuilder, WarcCollectionRegistry warcCollectionRegistry) {
 
         ServerTracingInterceptor tracingInterceptor = new ServerTracingInterceptor.Builder(GlobalTracer.get())
                 .withTracedAttributes(ServerTracingInterceptor.ServerRequestAttribute.CALL_ATTRIBUTES,
@@ -61,7 +60,7 @@ public class ApiServer implements AutoCloseable {
         threadPool = Executors.newCachedThreadPool();
         serverBuilder.executor(threadPool);
 
-        server = serverBuilder.addService(new ContentWriterService(warcCollectionRegistry, textExtractor)).build();
+        server = serverBuilder.addService(new ContentWriterService(warcCollectionRegistry)).build();
     }
 
     public ApiServer start() {

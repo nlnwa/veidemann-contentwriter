@@ -23,7 +23,6 @@ import no.nb.nna.veidemann.commons.db.DbException;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.opentracing.TracerFactory;
 import no.nb.nna.veidemann.contentwriter.settings.Settings;
-import no.nb.nna.veidemann.contentwriter.text.TextExtractor;
 import no.nb.nna.veidemann.contentwriter.warc.WarcCollectionRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,8 +59,7 @@ public class ContentWriter {
     public ContentWriter start() {
         try (DbService db = DbService.configure(SETTINGS);
              WarcCollectionRegistry warcCollectionRegistry = new WarcCollectionRegistry();
-             TextExtractor textExtractor = new TextExtractor();
-             ApiServer apiServer = new ApiServer(SETTINGS.getApiPort(), SETTINGS.getTerminationGracePeriodSeconds(), warcCollectionRegistry, textExtractor);) {
+             ApiServer apiServer = new ApiServer(SETTINGS.getApiPort(), SETTINGS.getTerminationGracePeriodSeconds(), warcCollectionRegistry)) {
 
             registerShutdownHook();
 
@@ -89,15 +87,7 @@ public class ContentWriter {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             // Use stderr here since the logger may have been reset by its JVM shutdown hook.
             System.err.println("*** shutting down since JVM is shutting down");
-
             mainThread.interrupt();
-            try {
-                mainThread.join();
-            } catch (InterruptedException e) {
-                //
-            }
-            System.err.println("*** gracefully shut down");
-
         }));
     }
 

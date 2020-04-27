@@ -23,7 +23,6 @@ import no.nb.nna.veidemann.api.contentwriter.v1.WriteReply;
 import no.nb.nna.veidemann.api.contentwriter.v1.WriteRequest;
 import no.nb.nna.veidemann.api.contentwriter.v1.WriteResponseMeta;
 import no.nb.nna.veidemann.contentwriter.WriteSessionContext.RecordData;
-import no.nb.nna.veidemann.contentwriter.text.TextExtractor;
 import no.nb.nna.veidemann.contentwriter.warc.SingleWarcWriter;
 import no.nb.nna.veidemann.contentwriter.warc.WarcCollection;
 import no.nb.nna.veidemann.contentwriter.warc.WarcCollection.Instance;
@@ -43,11 +42,8 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
 
     private final WarcCollectionRegistry warcCollectionRegistry;
 
-    private final TextExtractor textExtractor;
-
-    public ContentWriterService(WarcCollectionRegistry warcCollectionRegistry, TextExtractor textExtractor) {
+    public ContentWriterService(WarcCollectionRegistry warcCollectionRegistry) {
         this.warcCollectionRegistry = warcCollectionRegistry;
-        this.textExtractor = textExtractor;
     }
 
     @Override
@@ -139,10 +135,6 @@ public class ContentWriterService extends ContentWriterGrpc.ContentWriterImplBas
                             context.detectRevisit(recordNum, collection);
 
                             URI ref = warcWriters.getWarcWriter(recordData.getSubCollectionType()).writeRecord(recordData);
-
-                            if (context.getCollectionConfig().getCrawlConfig().getExtra().getExtractText()) {
-                                textExtractor.extractText(recordData);
-                            }
 
                             WriteResponseMeta.RecordMeta.Builder responseMeta = WriteResponseMeta.RecordMeta.newBuilder()
                                     .setRecordNum(recordNum)
