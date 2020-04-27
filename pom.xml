@@ -24,10 +24,9 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
-        <docker.tag>latest</docker.tag>
 
         <veidemann.version>0.3.3</veidemann.version>
-        <veidemann.api.version>1.0.0-beta12</veidemann.api.version>
+        <veidemann.api.version>1.0.0-beta14</veidemann.api.version>
         <veidemann.commons.version>0.4.1</veidemann.commons.version>
         <veidemann.rethinkdbadapter.version>0.4.5</veidemann.rethinkdbadapter.version>
         <org.apache.tika.version>1.22</org.apache.tika.version>
@@ -36,6 +35,8 @@
         <io.grpc.version>1.20.0</io.grpc.version>
         <rethinkdb.version>2.3.6</rethinkdb.version>
 
+        <!--suppress UnresolvedMavenProperty -->
+        <docker.tag>${env.DOCKER_TAG}</docker.tag>
         <!--suppress UnresolvedMavenProperty -->
         <docker.username>${env.DOCKER_USERNAME}</docker.username>
         <!--suppress UnresolvedMavenProperty -->
@@ -108,14 +109,14 @@
         <dependency>
             <groupId>com.typesafe</groupId>
             <artifactId>config</artifactId>
-            <version>1.3.3</version>
+            <version>1.4.0</version>
         </dependency>
 
         <!-- Do all logging thru Log4j -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>1.7.21</version>
+            <version>1.7.26</version>
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
@@ -180,7 +181,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-jar-plugin</artifactId>
-                    <version>3.0.2</version>
+                    <version>3.2.0</version>
                 </plugin>
                 <plugin>
                     <groupId>com.google.cloud.tools</groupId>
@@ -217,13 +218,6 @@
                 <configuration>
                     <to>
                         <image>docker.io/norsknettarkiv/${project.artifactId}</image>
-                        <tags>
-                            <tag>${docker.tag}</tag>
-                        </tags>
-                        <auth>
-                            <username>${docker.username}</username>
-                            <password>${docker.password}</password>
-                        </auth>
                     </to>
                     <container>
                         <ports>
@@ -282,6 +276,17 @@
                                 </goals>
                             </execution>
                         </executions>
+                        <configuration>
+                            <to>
+                                <tags>
+                                    <tag>${docker.tag}</tag>
+                                </tags>
+                                <auth>
+                                    <username>${docker.username}</username>
+                                    <password>${docker.password}</password>
+                                </auth>
+                            </to>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>
