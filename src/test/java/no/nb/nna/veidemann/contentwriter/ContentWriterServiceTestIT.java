@@ -351,6 +351,7 @@ public class ContentWriterServiceTestIT {
                 case RT_METADATA:
                     break;
                 case RT_REQUEST:
+                case RT_RESPONSE:
                     assertThat(actual.header.warcTargetUriStr)
                             .as("%s for record type '%s' should not be null", FN_WARC_TARGET_URI, actual.header.warcTypeStr)
                             .isNotEmpty();
@@ -404,32 +405,6 @@ public class ContentWriterServiceTestIT {
                     assertThat(actual.header.warcPayloadDigestStr)
                             .as("%s for record type '%s' should be empty", FN_WARC_PAYLOAD_DIGEST, actual.header.warcTypeStr)
                             .isNullOrEmpty();
-                    break;
-                case RT_RESPONSE:
-                    assertThat(actual.header.warcTargetUriStr)
-                            .as("%s for record type '%s' should not be null", FN_WARC_TARGET_URI, actual.header.warcTypeStr)
-                            .isNotEmpty();
-                    assertThat(actual.header.warcConcurrentToList)
-                            .as("%s for record type '%s' should not be empty", FN_WARC_CONCURRENT_TO, actual.header.warcTypeStr)
-                            .isNotEmpty();
-                    assertThat(actual.header.warcBlockDigestStr)
-                            .as("%s for record type '%s' should not be empty", FN_WARC_BLOCK_DIGEST, actual.header.warcTypeStr)
-                            .isNotEmpty();
-                    assertThat(actual.header.warcPayloadDigestStr)
-                            .as("%s for record type '%s' should not be empty", FN_WARC_PAYLOAD_DIGEST, actual.header.warcTypeStr)
-                            .isNotEmpty();
-                    assertThat(actual.header.warcIpAddress)
-                            .as("%s for record type '%s' should not be empty", FN_WARC_IP_ADDRESS, actual.header.warcTypeStr)
-                            .isNotEmpty();
-                    assertThat(actual.header.warcWarcinfoIdStr)
-                            .as("%s for record type '%s' should not be empty", FN_WARC_WARCINFO_ID, actual.header.warcTypeStr)
-                            .isNotEmpty();
-                    assertThat(actual.isValidBlockDigest)
-                            .as("%s for record type '%s' doesn't validate", FN_WARC_BLOCK_DIGEST, actual.header.warcTypeStr)
-                            .isTrue();
-                    assertThat(actual.isValidPayloadDigest)
-                            .as("%s for record type '%s' doesn't validate", FN_WARC_PAYLOAD_DIGEST, actual.header.warcTypeStr)
-                            .isTrue();
                     break;
                 case RT_REVISIT:
                     assertThat(actual.header.warcTargetUriStr)

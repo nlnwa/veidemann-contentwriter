@@ -24,18 +24,17 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
-        <docker.tag>latest</docker.tag>
 
         <veidemann.version>0.3.3</veidemann.version>
-        <veidemann.api.version>1.0.0-beta12</veidemann.api.version>
+        <veidemann.api.version>1.0.0-beta14</veidemann.api.version>
         <veidemann.commons.version>0.4.1</veidemann.commons.version>
         <veidemann.rethinkdbadapter.version>0.4.5</veidemann.rethinkdbadapter.version>
-        <org.apache.tika.version>1.22</org.apache.tika.version>
         <org.jwat.version>1.1.1</org.jwat.version>
         <log4j.version>2.7</log4j.version>
-        <io.grpc.version>1.20.0</io.grpc.version>
-        <rethinkdb.version>2.3.6</rethinkdb.version>
+        <rethinkdb.version>2.4.0</rethinkdb.version>
 
+        <!--suppress UnresolvedMavenProperty -->
+        <docker.tag>${env.DOCKER_TAG}</docker.tag>
         <!--suppress UnresolvedMavenProperty -->
         <docker.username>${env.DOCKER_USERNAME}</docker.username>
         <!--suppress UnresolvedMavenProperty -->
@@ -88,34 +87,18 @@
             <version>${org.jwat.version}</version>
         </dependency>
 
-        <dependency>
-            <groupId>org.apache.tika</groupId>
-            <artifactId>tika-core</artifactId>
-            <version>${org.apache.tika.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.tika</groupId>
-            <artifactId>tika-parsers</artifactId>
-            <version>${org.apache.tika.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.tika</groupId>
-            <artifactId>tika-langdetect</artifactId>
-            <version>${org.apache.tika.version}</version>
-        </dependency>
-
         <!-- Configuration framework -->
         <dependency>
             <groupId>com.typesafe</groupId>
             <artifactId>config</artifactId>
-            <version>1.3.3</version>
+            <version>1.4.0</version>
         </dependency>
 
         <!-- Do all logging thru Log4j -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>1.7.21</version>
+            <version>1.7.26</version>
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
@@ -180,7 +163,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-jar-plugin</artifactId>
-                    <version>3.0.2</version>
+                    <version>3.2.0</version>
                 </plugin>
                 <plugin>
                     <groupId>com.google.cloud.tools</groupId>
@@ -191,6 +174,7 @@
         </pluginManagement>
 
         <plugins>
+            <!-- Make sure we are running tests sequentially -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
@@ -217,13 +201,6 @@
                 <configuration>
                     <to>
                         <image>docker.io/norsknettarkiv/${project.artifactId}</image>
-                        <tags>
-                            <tag>${docker.tag}</tag>
-                        </tags>
-                        <auth>
-                            <username>${docker.username}</username>
-                            <password>${docker.password}</password>
-                        </auth>
                     </to>
                     <container>
                         <ports>
@@ -282,6 +259,17 @@
                                 </goals>
                             </execution>
                         </executions>
+                        <configuration>
+                            <to>
+                                <tags>
+                                    <tag>${docker.tag}</tag>
+                                </tags>
+                                <auth>
+                                    <username>${docker.username}</username>
+                                    <password>${docker.password}</password>
+                                </auth>
+                            </to>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>
@@ -299,7 +287,6 @@
                                 <id>prepare-tests</id>
                                 <phase>pre-integration-test</phase>
                                 <goals>
-                                    <!--<goal>build</goal>-->
                                     <goal>volume-create</goal>
                                     <goal>start</goal>
                                 </goals>
@@ -321,7 +308,7 @@
                             <removeVolumes>true</removeVolumes>
                             <autoCreateCustomNetworks>true</autoCreateCustomNetworks>
                             <verbose>false</verbose>
-                            <startParallel>false</startParallel>
+                            <startParallel>true</startParallel>
                             <volumes>
                                 <volume>
                                     <name>contentwriter-rethink-data</name>
@@ -364,13 +351,18 @@
                                             <enabled>true</enabled>
                                         </log>
                                         <wait>
-                                            <log>Server ready.*</log>
-                                            <time>100000</time>
+                                            <tcp>
+                                                <ports>
+                                                    <port>8080</port>
+                                                    <port>28015</port>
+                                                    <port>29015</port>
+                                                </ports>
+                                            </tcp>
                                         </wait>
                                     </run>
                                 </image>
                                 <image>
-                                    <name>norsknettarkiv/veidemann-db-initializer</name>
+                                    <name>norsknettarkiv/veidemann-db-initializer:${veidemann.rethinkdbadapter.version}</name>
                                     <alias>db-initializer</alias>
                                     <run>
                                         <network>
@@ -384,14 +376,13 @@
                                         <env>
                                             <DB_HOST>db</DB_HOST>
                                             <DB_USER>admin</DB_USER>
-                                            <DB_PASSWORD></DB_PASSWORD>
                                         </env>
                                         <log>
                                             <enabled>true</enabled>
                                         </log>
                                         <wait>
-                                            <log>DB initialized</log>
-                                            <time>60000</time>
+                                            <exit>0</exit>
+                                            <time>20000</time>
                                         </wait>
                                     </run>
                                 </image>

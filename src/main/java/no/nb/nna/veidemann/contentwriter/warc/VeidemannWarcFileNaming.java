@@ -5,6 +5,7 @@ import org.jwat.warc.WarcFileNaming;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class VeidemannWarcFileNaming implements WarcFileNaming {
@@ -12,22 +13,22 @@ public class VeidemannWarcFileNaming implements WarcFileNaming {
     /**
      * <code>DateFormat</code> to the following format 'yyyyMMddHHmmss'.
      */
-    protected DateFormat dateFormat = new SimpleDateFormat("yyyyMMddHHmmss");
+    protected final DateFormat dateFormat = new SimpleDateFormat("yyyyMMddHHmmss");
 
     /**
      * Prefix component.
      */
-    protected String filePrefix;
+    protected final String filePrefix;
 
     /**
      * Host name component.
      */
-    protected String hostName;
+    protected final String hostName;
 
     /**
      * Extension component (including leading ".").
      */
-    protected String extension;
+    protected final String extension;
 
     protected final static AtomicInteger sequenceNumber = new AtomicInteger(0);
 
@@ -38,11 +39,7 @@ public class VeidemannWarcFileNaming implements WarcFileNaming {
      * @param hostName   host name or null, if you want to use default local host name
      */
     public VeidemannWarcFileNaming(String filePrefix, String hostName) {
-        if (filePrefix != null) {
-            this.filePrefix = filePrefix;
-        } else {
-            this.filePrefix = "Veidemann";
-        }
+        this.filePrefix = Objects.requireNonNullElse(filePrefix, "Veidemann");
         this.hostName = hostName;
         extension = ".warc";
     }
