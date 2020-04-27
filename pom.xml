@@ -32,8 +32,7 @@
         <org.apache.tika.version>1.22</org.apache.tika.version>
         <org.jwat.version>1.1.1</org.jwat.version>
         <log4j.version>2.7</log4j.version>
-        <io.grpc.version>1.20.0</io.grpc.version>
-        <rethinkdb.version>2.3.6</rethinkdb.version>
+        <rethinkdb.version>2.4.0</rethinkdb.version>
 
         <!--suppress UnresolvedMavenProperty -->
         <docker.tag>${env.DOCKER_TAG}</docker.tag>
@@ -192,6 +191,7 @@
         </pluginManagement>
 
         <plugins>
+            <!-- Make sure we are running tests sequentially -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
@@ -304,7 +304,6 @@
                                 <id>prepare-tests</id>
                                 <phase>pre-integration-test</phase>
                                 <goals>
-                                    <!--<goal>build</goal>-->
                                     <goal>volume-create</goal>
                                     <goal>start</goal>
                                 </goals>
@@ -326,7 +325,7 @@
                             <removeVolumes>true</removeVolumes>
                             <autoCreateCustomNetworks>true</autoCreateCustomNetworks>
                             <verbose>false</verbose>
-                            <startParallel>false</startParallel>
+                            <startParallel>true</startParallel>
                             <volumes>
                                 <volume>
                                     <name>contentwriter-rethink-data</name>
@@ -369,13 +368,18 @@
                                             <enabled>true</enabled>
                                         </log>
                                         <wait>
-                                            <log>Server ready.*</log>
-                                            <time>100000</time>
+                                            <tcp>
+                                                <ports>
+                                                    <port>8080</port>
+                                                    <port>28015</port>
+                                                    <port>29015</port>
+                                                </ports>
+                                            </tcp>
                                         </wait>
                                     </run>
                                 </image>
                                 <image>
-                                    <name>norsknettarkiv/veidemann-db-initializer</name>
+                                    <name>norsknettarkiv/veidemann-db-initializer:${veidemann.rethinkdbadapter.version}</name>
                                     <alias>db-initializer</alias>
                                     <run>
                                         <network>
@@ -389,14 +393,13 @@
                                         <env>
                                             <DB_HOST>db</DB_HOST>
                                             <DB_USER>admin</DB_USER>
-                                            <DB_PASSWORD></DB_PASSWORD>
                                         </env>
                                         <log>
                                             <enabled>true</enabled>
                                         </log>
                                         <wait>
-                                            <log>DB initialized</log>
-                                            <time>60000</time>
+                                            <exit>0</exit>
+                                            <time>20000</time>
                                         </wait>
                                     </run>
                                 </image>
