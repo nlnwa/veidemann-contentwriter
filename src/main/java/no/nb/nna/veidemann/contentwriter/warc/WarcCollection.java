@@ -49,9 +49,9 @@ public class WarcCollection implements AutoCloseable {
     final ConfigObject config;
     final WarcWriterPool warcWriterPool;
     final Map<SubCollectionType, WarcWriterPool> subCollections;
-    String filePrefix;
-    String currentFileRotationKey;
-    Settings settings = ContentWriter.getSettings();
+    final String filePrefix;
+    final String currentFileRotationKey;
+    final Settings settings = ContentWriter.getSettings();
 
     public WarcCollection(ConfigObject config) {
 
@@ -174,7 +174,7 @@ public class WarcCollection implements AutoCloseable {
 
     public class Instance implements AutoCloseable {
         Lease<SingleWarcWriter> warcWriterLease;
-        Map<SubCollectionType, Lease<SingleWarcWriter>> subCollectionWarcWriterLeases =
+        final Map<SubCollectionType, Lease<SingleWarcWriter>> subCollectionWarcWriterLeases =
                 new EnumMap<>(SubCollectionType.class);
 
         public SingleWarcWriter getWarcWriter(SubCollectionType subType) {
