@@ -24,15 +24,11 @@ import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.db.DbServiceSPI;
 import no.nb.nna.veidemann.contentwriter.ContentBuffer;
-import no.nb.nna.veidemann.contentwriter.ContentWriterService;
 import no.nb.nna.veidemann.contentwriter.WriteSessionContext;
 import no.nb.nna.veidemann.contentwriter.WriteSessionContextBuilder;
-import no.nb.nna.veidemann.contentwriter.text.TextExtractor;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 
@@ -108,7 +104,6 @@ public class SingleWarcWriterTest {
 
     private static final String filePrefix = "test";
 
-    private static final Logger LOG = LoggerFactory.getLogger(ContentWriterService.class);
 
     @Rule
     public TemporaryFolder temporaryFolder = new TemporaryFolder();
@@ -174,15 +169,10 @@ public class SingleWarcWriterTest {
 
         writeRequestMeta.putRecordMeta(1, rm1);
 
-        try (SingleWarcWriter writer = new SingleWarcWriter(collectionConfig, null, filePrefix, targetDir, hostName);
-             TextExtractor textExtractor = mock(TextExtractor.class);
-             WarcCollectionRegistry warcCollectionRegistry = mock(WarcCollectionRegistry.class)) {
-
-            ContentWriterService contentWriterService = new ContentWriterService(warcCollectionRegistry, textExtractor);
-
+        try (SingleWarcWriter writer = new SingleWarcWriter(collectionConfig, null, filePrefix, targetDir, hostName)) {
             for (Integer recordNum : context.getRecordNums()) {
                 try (WriteSessionContext.RecordData recordData = context.getRecordData(recordNum)) {
-                        contentWriterService.writeRecord(writer, recordData);
+                    writer.writeRecord(recordData);
                 } catch (Exception e) {
                     e.printStackTrace(System.err);
                     throw e;

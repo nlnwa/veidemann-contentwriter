@@ -23,6 +23,7 @@ import no.nb.nna.veidemann.api.contentwriter.v1.WriteRequestMeta.RecordMeta;
 import no.nb.nna.veidemann.commons.db.DbException;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.util.Sha1Digest;
+import no.nb.nna.veidemann.contentwriter.ContentBuffer;
 import no.nb.nna.veidemann.contentwriter.Util;
 import no.nb.nna.veidemann.contentwriter.WriteSessionContext.RecordData;
 import no.nb.nna.veidemann.db.ProtoUtils;
@@ -30,6 +31,8 @@ import org.jwat.warc.WarcFileWriter;
 import org.jwat.warc.WarcFileWriterConfig;
 import org.jwat.warc.WarcRecord;
 import org.jwat.warc.WarcWriter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.File;
@@ -38,18 +41,21 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.Date;
-import java.util.GregorianCalendar;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.TimeZone;
+import java.util.*;
 
+import static io.netty.handler.codec.http.HttpConstants.CR;
+import static io.netty.handler.codec.http.HttpConstants.LF;
 import static org.jwat.warc.WarcConstants.*;
 
 /**
  *
  */
 public class SingleWarcWriter implements AutoCloseable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(SingleWarcWriter.class);
+
+    static final byte[] CRLF = {CR, LF};
+    static final String WARC_FILE_SCHEME = "warcfile";
 
     final WarcFileWriter warcFileWriter;
     final VeidemannWarcFileNaming warcFileNaming;
@@ -65,88 +71,81 @@ public class SingleWarcWriter implements AutoCloseable {
         warcFileWriter = WarcFileWriter.getWarcWriterInstance(warcFileNaming, writerConfig);
     }
 
-    public URI writeWarcHeader(final RecordData recordData) throws IOException {
+    public URI writeRecord(final RecordData recordData) throws IOException, SizeMismatchException {
+        ContentBuffer contentBuffer = recordData.getContentBuffer();
+        long size = 0L;
+        boolean newFile;
+
         try {
-            boolean newFile = warcFileWriter.nextWriter();
-            File currentFile = warcFileWriter.getFile();
-            String finalFileName = currentFile.getName().substring(0, currentFile.getName().length() - 5);
-
-            if (newFile) {
-                writeFileDescriptionRecords(currentFile, finalFileName);
-            }
-
-            WarcWriter writer = warcFileWriter.getWriter();
-
-            WarcRecord record = WarcRecord.createRecord(writer);
-            record.header.major = 1;
-            record.header.minor = 0;
-
-            record.header.addHeader(FN_WARC_TYPE, Util.getRecordTypeString(recordData.getRecordType()));
-            record.header.addHeader(FN_WARC_TARGET_URI, recordData.getTargetUri());
-            Date warcDate = Date.from(ProtoUtils.tsToOdt(recordData.getFetchTimeStamp()).toInstant());
-            record.header.addHeader(FN_WARC_DATE, warcDate, null);
-            record.header.addHeader(FN_WARC_RECORD_ID, Util.formatIdentifierAsUrn(recordData.getWarcId()));
-
-            if (recordData.getRevisitRef() != null) {
-                record.header.addHeader(FN_WARC_PROFILE, PROFILE_IDENTICAL_PAYLOAD_DIGEST);
-                record.header.addHeader(FN_WARC_REFERS_TO, Util.formatIdentifierAsUrn(recordData.getRevisitRef().getWarcId()));
-                if (!recordData.getRevisitRef().getTargetUri().isEmpty() && recordData.getRevisitRef().hasDate()) {
-                    record.header.addHeader(FN_WARC_REFERS_TO_TARGET_URI,
-                            recordData.getRevisitRef().getTargetUri());
-                    record.header.addHeader(FN_WARC_REFERS_TO_DATE,
-                            Date.from(ProtoUtils.tsToOdt(recordData.getRevisitRef().getDate()).toInstant()), null);
-                }
-            }
-
-            record.header.addHeader(FN_WARC_IP_ADDRESS, recordData.getIpAddress());
-            record.header.addHeader(FN_WARC_WARCINFO_ID, "<" + warcFileWriter.warcinfoRecordId + ">");
-
-            RecordMeta recordMeta = recordData.getRecordMeta();
-            record.header.addHeader(FN_WARC_BLOCK_DIGEST, recordMeta.getBlockDigest());
-            if (!recordMeta.getPayloadDigest().isEmpty()) {
-                record.header.addHeader(FN_WARC_PAYLOAD_DIGEST, recordMeta.getPayloadDigest());
-            }
-
-            record.header.addHeader(FN_CONTENT_LENGTH, recordMeta.getSize(), null);
-
-            if (!recordMeta.getRecordContentType().isEmpty()) {
-                record.header.addHeader(FN_CONTENT_TYPE, recordMeta.getRecordContentType());
-            }
-
-            for (String otherId : recordData.getWarcConcurrentToIds()) {
-                if (!otherId.equals(recordData.getWarcId())) {
-                    record.header.addHeader(FN_WARC_CONCURRENT_TO, Util.formatIdentifierAsUrn(otherId));
-                }
-            }
-
-            writer.writeHeader(record);
-
-            return new URI("warcfile:" + finalFileName + ":" + currentFile.length());
-        } catch (IOException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new RuntimeException(ex);
+            newFile = warcFileWriter.nextWriter();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
-    }
 
-    public long addPayload(byte[] data) throws UncheckedIOException {
+        File currentFile = warcFileWriter.getFile();
+        String finalFileName = currentFile.getName().substring(0, currentFile.getName().length() - 5);
+
+        if (newFile) {
+            writeFileDescriptionRecords(finalFileName);
+            try {
+                URI ref = new URI(WARC_FILE_SCHEME + ":" + finalFileName + ":" + currentFile.length());
+                String recordId = warcFileWriter.warcinfoRecordId.toString();
+                recordId = recordId.substring(recordId.lastIndexOf(':') + 1);
+                StorageRef storageRef = StorageRef.newBuilder()
+                        .setWarcId(recordId)
+                        .setStorageRef(ref.toString())
+                        .setRecordType(RecordType.WARCINFO)
+                        .build();
+                saveStorageRef(storageRef);
+            } catch (URISyntaxException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        writeWarcHeader(recordData);
+
+        if (contentBuffer.hasHeader()) {
+            size += addPayload(contentBuffer.getHeader().newInput());
+        }
+
+        if (contentBuffer.hasPayload()) {
+            // If both headers and payload are present, add separator
+            if (contentBuffer.hasHeader()) {
+                size += addPayload(CRLF);
+            }
+            long payloadSize = addPayload(contentBuffer.getPayload().newInput());
+
+            LOG.debug("Payload of size {}b written for {}", payloadSize, recordData.getTargetUri());
+            size += payloadSize;
+        }
+
         try {
-            return warcFileWriter.getWriter().writePayload(data);
+            closeRecord();
+        } catch (IllegalStateException e) {
+            throw new SizeMismatchException(e.getMessage());
         } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
+            if (recordData.getRecordMeta().getSize() != size) {
+                SizeMismatchException sizeMismatchException = new SizeMismatchException(recordData.getRecordMeta().getSize(), size);
+                sizeMismatchException.initCause(ex);
+                throw sizeMismatchException;
+            } else {
+                throw ex;
+            }
         }
-    }
-
-    public long addPayload(InputStream data) throws UncheckedIOException {
         try {
-            return warcFileWriter.getWriter().streamPayload(data);
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
-        }
-    }
+            URI ref = new URI("warcfile:" + finalFileName + ":" + currentFile.length());
+            StorageRef storageRef = StorageRef.newBuilder()
+                    .setWarcId(recordData.getWarcId())
+                    .setStorageRef(ref.toString())
+                    .setRecordType(recordData.getRecordType())
+                    .build();
+            saveStorageRef(storageRef);
 
-    public void closeRecord() throws IOException {
-        warcFileWriter.getWriter().closeRecord();
+            return ref;
+
+        } catch (URISyntaxException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -154,7 +153,7 @@ public class SingleWarcWriter implements AutoCloseable {
         warcFileWriter.close();
     }
 
-    void writeFileDescriptionRecords(File currentFile, String finalFileName) throws IOException {
+    void writeFileDescriptionRecords(String finalFileName) throws IOException {
         WarcWriter writer = warcFileWriter.getWriter();
         WarcRecord record = WarcRecord.createRecord(writer);
         record.header.major = 1;
@@ -191,23 +190,90 @@ public class SingleWarcWriter implements AutoCloseable {
 
         writer.writePayload(payloadBytes);
         writer.closeRecord();
+    }
 
+    void writeWarcHeader(final RecordData recordData) throws IOException {
+        WarcWriter writer = warcFileWriter.getWriter();
+        WarcRecord record = WarcRecord.createRecord(writer);
+        record.header.major = 1;
+        record.header.minor = 0;
+
+        record.header.addHeader(FN_WARC_TYPE, Util.getRecordTypeString(recordData.getRecordType()));
+        record.header.addHeader(FN_WARC_TARGET_URI, recordData.getTargetUri());
+        Date warcDate = Date.from(ProtoUtils.tsToOdt(recordData.getFetchTimeStamp()).toInstant());
+        record.header.addHeader(FN_WARC_DATE, warcDate, null);
+        record.header.addHeader(FN_WARC_RECORD_ID, Util.formatIdentifierAsUrn(recordData.getWarcId()));
+
+        if (recordData.getRevisitRef() != null) {
+            record.header.addHeader(FN_WARC_PROFILE, PROFILE_IDENTICAL_PAYLOAD_DIGEST);
+            record.header.addHeader(FN_WARC_REFERS_TO, Util.formatIdentifierAsUrn(recordData.getRevisitRef().getWarcId()));
+            if (!recordData.getRevisitRef().getTargetUri().isEmpty() && recordData.getRevisitRef().hasDate()) {
+                record.header.addHeader(FN_WARC_REFERS_TO_TARGET_URI,
+                        recordData.getRevisitRef().getTargetUri());
+                record.header.addHeader(FN_WARC_REFERS_TO_DATE,
+                        Date.from(ProtoUtils.tsToOdt(recordData.getRevisitRef().getDate()).toInstant()), null);
+            }
+        }
+
+        record.header.addHeader(FN_WARC_IP_ADDRESS, recordData.getIpAddress());
+        record.header.addHeader(FN_WARC_WARCINFO_ID, "<" + warcFileWriter.warcinfoRecordId + ">");
+
+        RecordMeta recordMeta = recordData.getRecordMeta();
+        record.header.addHeader(FN_WARC_BLOCK_DIGEST, recordMeta.getBlockDigest());
+        if (!recordMeta.getPayloadDigest().isEmpty()) {
+            record.header.addHeader(FN_WARC_PAYLOAD_DIGEST, recordMeta.getPayloadDigest());
+        }
+
+        record.header.addHeader(FN_CONTENT_LENGTH, recordMeta.getSize(), null);
+
+        if (!recordMeta.getRecordContentType().isEmpty()) {
+            record.header.addHeader(FN_CONTENT_TYPE, recordMeta.getRecordContentType());
+        }
+
+        for (String otherId : recordData.getWarcConcurrentToIds()) {
+            if (!otherId.equals(recordData.getWarcId())) {
+                record.header.addHeader(FN_WARC_CONCURRENT_TO, Util.formatIdentifierAsUrn(otherId));
+            }
+        }
+
+        writer.writeHeader(record);
+    }
+
+    long addPayload(byte[] data) throws UncheckedIOException {
         try {
-            URI ref = new URI("warcfile:" + finalFileName + ":" + currentFile.length());
-            String recordId = warcFileWriter.warcinfoRecordId.toString();
-            recordId = recordId.substring(recordId.lastIndexOf(':') + 1);
-
-            StorageRef storageRef = StorageRef.newBuilder()
-                    .setWarcId(recordId)
-                    .setRecordType(RecordType.WARCINFO)
-                    .setStorageRef(ref.toString())
-                    .build();
-            DbService.getInstance().getExecutionsAdapter().saveStorageRef(storageRef);
-        } catch (DbException e) {
-            throw new IOException(e);
-        } catch (URISyntaxException e) {
-            throw new RuntimeException(e);
+            return warcFileWriter.getWriter().writePayload(data);
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
         }
     }
 
+    long addPayload(InputStream data) throws UncheckedIOException {
+        try {
+            return warcFileWriter.getWriter().streamPayload(data);
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
+
+    void closeRecord() throws IOException {
+        warcFileWriter.getWriter().closeRecord();
+    }
+
+    private void saveStorageRef(StorageRef storageRef) {
+        try {
+            DbService.getInstance().getExecutionsAdapter().saveStorageRef(storageRef);
+        } catch (IllegalStateException | DbException e) {
+            LOG.warn("failed to save storage ref: {}\n\twarcId: {}\n\trecordType: {}\n\tstorageRef: {}\n", e.getLocalizedMessage(), storageRef.getWarcId(), storageRef.getRecordType(), storageRef.getStorageRef());
+        }
+    }
+
+    public static class SizeMismatchException extends Exception {
+        SizeMismatchException(String message) {
+            super(message);
+        }
+
+        SizeMismatchException(long expectedSize, long actualSize) {
+            super("Size doesn't match metadata. Expected " + expectedSize + ", but was " + actualSize);
+        }
+    }
 }

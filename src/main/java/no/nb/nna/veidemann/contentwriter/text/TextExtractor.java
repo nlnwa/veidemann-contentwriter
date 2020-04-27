@@ -15,8 +15,18 @@
  */
 package no.nb.nna.veidemann.contentwriter.text;
 
-import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
+import com.google.protobuf.ByteString;
+import no.nb.nna.veidemann.api.contentwriter.v1.RecordType;
 import no.nb.nna.veidemann.commons.db.DbException;
+import no.nb.nna.veidemann.commons.db.DbService;
+import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
+import no.nb.nna.veidemann.contentwriter.ContentBuffer;
+import no.nb.nna.veidemann.contentwriter.WriteSessionContext;
+import org.apache.http.HttpException;
+import org.apache.http.HttpResponse;
+import org.apache.http.impl.io.DefaultHttpResponseParser;
+import org.apache.http.impl.io.HttpTransportMetricsImpl;
+import org.apache.http.impl.io.SessionInputBufferImpl;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.parser.AutoDetectParser;
@@ -27,6 +37,7 @@ import org.slf4j.MDC;
 import org.xml.sax.ContentHandler;
 import org.xml.sax.SAXException;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -34,7 +45,24 @@ import java.io.InputStream;
  *
  */
 public class TextExtractor implements AutoCloseable {
-    private static final Logger LOG = LoggerFactory.getLogger(TextExtractor.class);
+    static final Logger LOG = LoggerFactory.getLogger(TextExtractor.class);
+    static final ExecutionsAdapter db = DbService.getInstance().getExecutionsAdapter();
+
+    public void extractText(WriteSessionContext.RecordData recordData) {
+        ContentBuffer contentBuffer = recordData.getContentBuffer();
+
+        if (recordData.getRecordType() == RecordType.RESPONSE && contentBuffer.getHeader() != null) {
+            try {
+                HttpResponse httpMessage = getHttpResponse(contentBuffer);
+                analyze(recordData.getWarcId(), recordData.getTargetUri(),
+                        httpMessage.getFirstHeader("content-type").getValue(),
+                        httpMessage.getStatusLine().getStatusCode(),
+                        contentBuffer.getPayload().newInput(), db);
+            } catch (Exception ex) {
+                LOG.error("Failed extracting text: {}", ex.getMessage(), ex);
+            }
+        }
+    }
 
     public void analyze(String warcId, String targetUri, String contentType, int responseCode, InputStream in, ExecutionsAdapter db) throws IOException {
         MDC.put("uri", targetUri);
@@ -51,9 +79,13 @@ public class TextExtractor implements AutoCloseable {
                 parser.parse(in, handler, metadata);
                 if (metadata.get("Language") != null) {
                     metadata.add("Orig-Content-Type", contentType);
-//                    stats.log(logEntry.getRequestedUri(), metadata, innerHandler.getText());
                 }
-                LOG.debug("META: " + metadata);
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("META:");
+                    for (String name : metadata.names()) {
+                        System.out.println("\t" + name + ": " + metadata.get(name));
+                    }
+                }
                 if (innerHandler.getExtractedText().getCharacterCount() > 50) {
                     db.addExtractedText(innerHandler.getExtractedText());
                 }
@@ -90,8 +122,15 @@ public class TextExtractor implements AutoCloseable {
         return shouldParse;
     }
 
+    HttpResponse getHttpResponse(ContentBuffer contentBuffer) throws IOException, HttpException {
+        ByteString headerBuf = contentBuffer.getHeader();
+        SessionInputBufferImpl sessionInputBuffer = new SessionInputBufferImpl(new HttpTransportMetricsImpl(), headerBuf.size());
+        sessionInputBuffer.bind(new ByteArrayInputStream(headerBuf.toByteArray()));
+        DefaultHttpResponseParser responseParser = new DefaultHttpResponseParser(sessionInputBuffer);
+        return responseParser.parse();
+    }
+
     @Override
     public void close() {
     }
-
 }
