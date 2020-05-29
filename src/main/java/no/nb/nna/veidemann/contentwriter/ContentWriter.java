@@ -88,6 +88,11 @@ public class ContentWriter {
             // Use stderr here since the logger may have been reset by its JVM shutdown hook.
             System.err.println("*** shutting down since JVM is shutting down");
             mainThread.interrupt();
+            try {
+                mainThread.join();
+            } catch (InterruptedException e) {
+                //
+            }
         }));
     }
 
