@@ -17,11 +17,7 @@ package no.nb.nna.veidemann.contentwriter.warc;
 
 import no.nb.nna.veidemann.api.config.v1.Collection.SubCollection;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
-import no.nb.nna.veidemann.api.contentwriter.v1.RecordType;
-import no.nb.nna.veidemann.api.contentwriter.v1.StorageRef;
 import no.nb.nna.veidemann.api.contentwriter.v1.WriteRequestMeta.RecordMeta;
-import no.nb.nna.veidemann.commons.db.DbException;
-import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.util.Sha1Digest;
 import no.nb.nna.veidemann.contentwriter.ContentBuffer;
 import no.nb.nna.veidemann.contentwriter.Util;
@@ -87,19 +83,6 @@ public class SingleWarcWriter implements AutoCloseable {
 
         if (newFile) {
             writeFileDescriptionRecords(finalFileName);
-            try {
-                URI ref = new URI(WARC_FILE_SCHEME + ":" + finalFileName + ":" + currentFile.length());
-                String recordId = warcFileWriter.warcinfoRecordId.toString();
-                recordId = recordId.substring(recordId.lastIndexOf(':') + 1);
-                StorageRef storageRef = StorageRef.newBuilder()
-                        .setWarcId(recordId)
-                        .setStorageRef(ref.toString())
-                        .setRecordType(RecordType.WARCINFO)
-                        .build();
-                saveStorageRef(storageRef);
-            } catch (URISyntaxException e) {
-                throw new RuntimeException(e);
-            }
         }
 
         writeWarcHeader(recordData);
@@ -133,16 +116,7 @@ public class SingleWarcWriter implements AutoCloseable {
             }
         }
         try {
-            URI ref = new URI("warcfile:" + finalFileName + ":" + currentFile.length());
-            StorageRef storageRef = StorageRef.newBuilder()
-                    .setWarcId(recordData.getWarcId())
-                    .setStorageRef(ref.toString())
-                    .setRecordType(recordData.getRecordType())
-                    .build();
-            saveStorageRef(storageRef);
-
-            return ref;
-
+            return new URI(WARC_FILE_SCHEME + ":" + finalFileName + ":" + currentFile.length());
         } catch (URISyntaxException e) {
             throw new RuntimeException(e);
         }
@@ -257,14 +231,6 @@ public class SingleWarcWriter implements AutoCloseable {
 
     void closeRecord() throws IOException {
         warcFileWriter.getWriter().closeRecord();
-    }
-
-    private void saveStorageRef(StorageRef storageRef) {
-        try {
-            DbService.getInstance().getExecutionsAdapter().saveStorageRef(storageRef);
-        } catch (IllegalStateException | DbException e) {
-            LOG.warn("failed to save storage ref: {}\n\twarcId: {}\n\trecordType: {}\n\tstorageRef: {}\n", e.getLocalizedMessage(), storageRef.getWarcId(), storageRef.getRecordType(), storageRef.getStorageRef());
-        }
     }
 
     public static class SizeMismatchException extends Exception {
