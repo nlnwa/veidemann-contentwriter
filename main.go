@@ -94,7 +94,7 @@ func main() {
 	defer ms.Close()
 
 	go func() {
-		signals := make(chan os.Signal)
+		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 
 		select {

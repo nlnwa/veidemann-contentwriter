@@ -38,25 +38,6 @@ import (
 const bufSize = 1024 * 1024
 const warcdir = "testdata"
 
-//var lis *bufconn.Listener
-
-//func mockServer(t *testing.T, c database.ConfigCache) *GrpcServer {
-//	lis = bufconn.Listen(bufSize)
-//	s := New("", 0, settings.NewMock(warcdir, 1), c)
-//	s.grpcServer = grpc.NewServer()
-//	contentwriter.RegisterContentWriterServer(s.grpcServer, s.service)
-//	go func() {
-//		if err := s.grpcServer.Serve(lis); err != nil {
-//			t.Fatalf("Server exited with error: %v", err)
-//		}
-//	}()
-//	return s
-//}
-
-//func bufDialer(context.Context, string) (net.Conn, error) {
-//	return lis.Dial()
-//}
-
 type serverAndClient struct {
 	lis        *bufconn.Listener
 	dbMock     *r.Mock
@@ -65,7 +46,7 @@ type serverAndClient struct {
 	client     contentwriter.ContentWriterClient
 }
 
-func newServerAndClient(t *testing.T) serverAndClient {
+func newServerAndClient() serverAndClient {
 	serverAndClient := serverAndClient{}
 
 	dbMockConn := database.NewMockConnection()
@@ -88,7 +69,7 @@ func newServerAndClient(t *testing.T) serverAndClient {
 	contentwriter.RegisterContentWriterServer(server.grpcServer, server.service)
 	go func() {
 		if err := server.grpcServer.Serve(serverAndClient.lis); err != nil {
-			t.Fatalf("Server exited with error: %v", err)
+			panic(fmt.Errorf("Server exited with error: %v", err))
 		}
 	}()
 	serverAndClient.server = server
@@ -100,7 +81,7 @@ func newServerAndClient(t *testing.T) serverAndClient {
 	ctx := context.Background()
 	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithInsecure())
 	if err != nil {
-		t.Fatalf("Failed to dial bufnet: %v", err)
+		panic(fmt.Errorf("Failed to dial bufnet: %v", err))
 	}
 	serverAndClient.clientConn = conn
 	serverAndClient.client = contentwriter.NewContentWriterClient(conn)
@@ -204,7 +185,7 @@ func TestContentWriterService_Write(t *testing.T) {
 		return time.Date(2000, 10, 10, 2, 59, 59, 0, time.UTC)
 	}
 
-	serverAndClient := newServerAndClient(t)
+	serverAndClient := newServerAndClient()
 	serverAndClient.dbMock.
 		On(r.Table("crawled_content").Get("sha1:C37FFB221569C553A2476C22C7DAD429F3492977:c1_2000101002")).
 		Return(nil, nil).Once()
@@ -229,7 +210,7 @@ func TestContentWriterService_Write(t *testing.T) {
 	assert.Equal("sha1:DA39A3EE5E6B4B0D3255BFEF95601890AFD80709", reply.Meta.RecordMeta[0].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[0].CollectionFinalName)
 	assert.Equal("", reply.Meta.RecordMeta[0].RevisitReferenceId)
-	assert.Regexp("warcfile:c1_2000101002-\\d{14}-0001-10.69.20.20.warc:326", reply.Meta.RecordMeta[0].StorageRef)
+	assert.Regexp(`warcfile:c1_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc:326`, reply.Meta.RecordMeta[0].StorageRef)
 
 	assert.Equal(int32(1), reply.Meta.RecordMeta[1].RecordNum)
 	assert.Equal(contentwriter.RecordType_RESPONSE, reply.Meta.RecordMeta[1].Type)
@@ -238,7 +219,7 @@ func TestContentWriterService_Write(t *testing.T) {
 	assert.Equal("sha1:C37FFB221569C553A2476C22C7DAD429F3492977", reply.Meta.RecordMeta[1].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[1].CollectionFinalName)
 	assert.Equal("", reply.Meta.RecordMeta[1].RevisitReferenceId)
-	assert.Regexp("warcfile:c1_2000101002-\\d{14}-0001-10.69.20.20.warc:954", reply.Meta.RecordMeta[1].StorageRef)
+	assert.Regexp(`warcfile:c1_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc:954`, reply.Meta.RecordMeta[1].StorageRef)
 
 	listFiles(warcdir)
 	serverAndClient.close()
@@ -254,7 +235,7 @@ func TestContentWriterService_WriteRevisit(t *testing.T) {
 		return time.Date(2000, 10, 10, 2, 59, 59, 0, time.UTC)
 	}
 
-	serverAndClient := newServerAndClient(t)
+	serverAndClient := newServerAndClient()
 	serverAndClient.dbMock.
 		On(r.Table("crawled_content").Get("sha1:C37FFB221569C553A2476C22C7DAD429F3492977:c1_2000101002")).
 		Return(map[string]interface{}{
@@ -284,7 +265,7 @@ func TestContentWriterService_WriteRevisit(t *testing.T) {
 	assert.Equal("sha1:DA39A3EE5E6B4B0D3255BFEF95601890AFD80709", reply.Meta.RecordMeta[0].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[0].CollectionFinalName)
 	assert.Equal("", reply.Meta.RecordMeta[0].RevisitReferenceId)
-	assert.Regexp("warcfile:c1_2000101002-\\d{14}-0001-10.69.20.20.warc:326", reply.Meta.RecordMeta[0].StorageRef)
+	assert.Regexp(`warcfile:c1_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc:326`, reply.Meta.RecordMeta[0].StorageRef)
 
 	assert.Equal(int32(1), reply.Meta.RecordMeta[1].RecordNum)
 	assert.Equal(contentwriter.RecordType_REVISIT, reply.Meta.RecordMeta[1].Type)
@@ -293,7 +274,7 @@ func TestContentWriterService_WriteRevisit(t *testing.T) {
 	assert.Equal("sha1:C37FFB221569C553A2476C22C7DAD429F3492977", reply.Meta.RecordMeta[1].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[1].CollectionFinalName)
 	assert.Equal("<urn:uuid:fff232109-0d71-467f-b728-de86be386c6f>", reply.Meta.RecordMeta[1].RevisitReferenceId)
-	assert.Regexp("warcfile:c1_2000101002-\\d{14}-0001-10.69.20.20.warc:954", reply.Meta.RecordMeta[1].StorageRef)
+	assert.Regexp(`warcfile:c1_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc:954`, reply.Meta.RecordMeta[1].StorageRef)
 
 	listFiles(warcdir)
 	serverAndClient.close()

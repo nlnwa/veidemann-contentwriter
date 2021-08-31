@@ -120,8 +120,8 @@ func (c *RethinkDbConnection) HasCrawledContent(ctx context.Context, payloadDige
 		return nil, nil
 	} else {
 		var res contentwriter.CrawledContent
-		response.One(&res)
-		return &res, nil
+		err := response.One(&res)
+		return &res, err
 	}
 }
 

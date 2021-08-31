@@ -44,7 +44,7 @@ var decodeConfigObject = func(encoded interface{}, value reflect.Value) error {
 		return fmt.Errorf("error decoding ConfigObject: %w", err)
 	}
 
-	value.Set(reflect.ValueOf(co))
+	value.Set(reflect.ValueOf(&co).Elem())
 	return nil
 }
 
@@ -60,7 +60,7 @@ var decodeCrawlExecutionStatus = func(encoded interface{}, value reflect.Value) 
 		return fmt.Errorf("error decoding CrawlExecutionStatus: %v", err)
 	}
 
-	value.Set(reflect.ValueOf(co))
+	value.Set(reflect.ValueOf(&co).Elem())
 	return nil
 }
 
@@ -79,7 +79,7 @@ var decodeCrawledContent = func(encoded interface{}, value reflect.Value) error 
 		return fmt.Errorf("error decoding CrawledContent: %w", err)
 	}
 
-	value.Set(reflect.ValueOf(co))
+	value.Set(reflect.ValueOf(&co).Elem())
 	return nil
 }
 
