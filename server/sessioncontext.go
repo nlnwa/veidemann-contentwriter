@@ -23,6 +23,7 @@ import (
 	"github.com/nlnwa/veidemann-api/go/config/v1"
 	"github.com/nlnwa/veidemann-api/go/contentwriter/v1"
 	"github.com/nlnwa/veidemann-contentwriter/database"
+	"github.com/nlnwa/veidemann-contentwriter/settings"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -33,6 +34,8 @@ import (
 
 type writeSessionContext struct {
 	log              zerolog.Logger
+	settings         settings.Settings
+	dbAdapter        database.DbAdapter
 	configCache      database.ConfigCache
 	meta             *contentwriter.WriteRequestMeta
 	collectionConfig *config.ConfigObject
@@ -42,8 +45,9 @@ type writeSessionContext struct {
 	canceled         bool
 }
 
-func newWriteSessionContext(configCache database.ConfigCache) *writeSessionContext {
+func newWriteSessionContext(settings settings.Settings, configCache database.ConfigCache) *writeSessionContext {
 	return &writeSessionContext{
+		settings:       settings,
 		configCache:    configCache,
 		records:        make(map[int32]gowarc.WarcRecord),
 		recordBuilders: make(map[int32]gowarc.WarcRecordBuilder),
@@ -91,31 +95,13 @@ func (s *writeSessionContext) getRecordBuilder(recordNum int32) (gowarc.WarcReco
 		return recordBuilder, nil
 	}
 
-	var rt gowarc.RecordType
-	opts := []gowarc.WarcRecordOption{gowarc.WithStrictValidation()}
+	opts := []gowarc.WarcRecordOption{gowarc.WithStrictValidation(), gowarc.WithBufferTmpDir(s.settings.WorkDir())}
 	recordMeta, ok := s.meta.RecordMeta[recordNum]
 	if !ok {
 		return nil, fmt.Errorf("Missing metadata for record #%d", recordNum)
 	}
 
-	switch recordMeta.Type {
-	case contentwriter.RecordType_WARCINFO:
-		rt = gowarc.Warcinfo
-	case contentwriter.RecordType_RESPONSE:
-		rt = gowarc.Response
-	case contentwriter.RecordType_RESOURCE:
-		rt = gowarc.Resource
-	case contentwriter.RecordType_REQUEST:
-		rt = gowarc.Request
-	case contentwriter.RecordType_METADATA:
-		rt = gowarc.Metadata
-	case contentwriter.RecordType_REVISIT:
-		rt = gowarc.Revisit
-	case contentwriter.RecordType_CONVERSION:
-		rt = gowarc.Conversion
-	case contentwriter.RecordType_CONTINUATION:
-		rt = gowarc.Continuation
-	}
+	rt := ToGowarcRecordType(recordMeta.Type)
 	rb := gowarc.NewRecordBuilder(rt, opts...)
 	s.recordBuilders[recordNum] = rb
 	return rb, nil
@@ -127,11 +113,8 @@ func (s *writeSessionContext) validateSession() error {
 		if !ok {
 			return s.handleErr(codes.InvalidArgument, "Missing metadata for record num: %d", k)
 		}
-		//ContentBuffer contentBuffer = recordEntry.getValue().getContentBuffer();
-		//WriteRequestMeta.RecordMeta recordMeta = writeRequestMeta.getRecordMetaOrDefault(recordEntry.getKey(), null);
 
 		rb.AddWarcHeader(gowarc.WarcIPAddress, s.meta.IpAddress)
-
 		rb.AddWarcHeaderTime(gowarc.WarcDate, time.Now())
 		rb.AddWarcHeaderInt64(gowarc.ContentLength, recordMeta.Size)
 		rb.AddWarcHeader(gowarc.ContentType, recordMeta.RecordContentType)
@@ -139,7 +122,9 @@ func (s *writeSessionContext) validateSession() error {
 		if recordMeta.PayloadDigest != "" {
 			rb.AddWarcHeader(gowarc.WarcPayloadDigest, recordMeta.PayloadDigest)
 		}
-		rb.AddWarcHeader(gowarc.WarcPayloadDigest, recordMeta.PayloadDigest)
+		for _, wct := range recordMeta.GetWarcConcurrentTo() {
+			rb.AddWarcHeader(gowarc.WarcConcurrentTo, wct)
+		}
 
 		wr, _, err := rb.Build()
 		if err != nil {
@@ -157,140 +142,3 @@ func (s *writeSessionContext) cancelSession(cancelReason string) {
 		_ = rb.Close()
 	}
 }
-
-/*
-public class WriteSessionContext {
-    private static final Logger LOG = LoggerFactory.getLogger(WriteSessionContext.class);
-    private static final ConfigAdapter config = DbService.getInstance().getConfigAdapter();
-    private static final ExecutionsAdapter dbAdapter = DbService.getInstance().getExecutionsAdapter();
-
-    //    private final Map<Integer, ContentBuffer> contentBuffers = new HashMap<>();
-    final Map<Integer, RecordData> recordDataMap = new HashMap<>();
-
-    WriteRequestMeta.Builder writeRequestMeta;
-    private boolean canceled = false;
-
-    public RecordData getRecordData(Integer recordNum) {
-        return recordDataMap.computeIfAbsent(recordNum, RecordData::new);
-    }
-
-    public boolean hasWriteRequestMeta() {
-        return writeRequestMeta != null;
-    }
-
-    public ConfigObject getCollectionConfig() {
-        return collectionConfig;
-    }
-
-    public Set<Integer> getRecordNums() {
-        return writeRequestMeta.getRecordMetaMap().keySet();
-    }
-
-    public void detectRevisit(final Integer recordNum, final WarcCollection collection) {
-        RecordData rd = getRecordData(recordNum);
-        if (rd.getRecordType() == RecordType.RESPONSE || rd.getRecordType() == RecordType.RESOURCE) {
-            Optional<CrawledContent> isDuplicate = Optional.empty();
-            try {
-                String digest = rd.getContentBuffer().getPayloadDigest();
-                if (digest == null || digest.isEmpty()) {
-                    digest = rd.getContentBuffer().getBlockDigest();
-                }
-                CrawledContent cr = CrawledContent.newBuilder()
-                        .setDigest(digest + ":" + collection.getCollectionName(rd.getSubCollectionType()))
-                        .setWarcId(rd.getWarcId())
-                        .setTargetUri(writeRequestMeta.getTargetUri())
-                        .setDate(writeRequestMeta.getFetchTimeStamp())
-                        .build();
-                isDuplicate = dbAdapter
-                        .hasCrawledContent(cr);
-            } catch (DbException e) {
-                LOG.error("Failed checking for revisit, treating as new object", e);
-            }
-
-            if (isDuplicate.isPresent()) {
-                CrawledContent cc = isDuplicate.get();
-                LOG.debug("Detected {} as a revisit of {}",
-                        MDC.get("uri"), cc.getWarcId());
-
-                WriteRequestMeta.RecordMeta newRecordMeta = rd.getRecordMeta().toBuilder()
-                        .setType(RecordType.REVISIT)
-                        .setBlockDigest(rd.getContentBuffer().getHeaderDigest())
-                        .setPayloadDigest(rd.getContentBuffer().getPayloadDigest())
-                        .setSize(rd.getContentBuffer().getHeaderSize())
-                        .build();
-                writeRequestMeta.putRecordMeta(recordNum, newRecordMeta);
-
-                rd.getContentBuffer().removePayload();
-
-                rd.revisitRef = cc;
-            }
-        }
-
-        if (rd.revisitRef == null) {
-            WriteRequestMeta.RecordMeta newRecordMeta = rd.getRecordMeta().toBuilder()
-                    .setBlockDigest(rd.getContentBuffer().getBlockDigest())
-                    .setPayloadDigest(rd.getContentBuffer().getPayloadDigest())
-                    .build();
-            writeRequestMeta.putRecordMeta(recordNum, newRecordMeta);
-        }
-    }
-
-    public class RecordData implements AutoCloseable {
-        private final Integer recordNum;
-        private final ContentBuffer contentBuffer = new ContentBuffer();
-        private CrawledContent revisitRef;
-
-        public RecordData(Integer recordNum) {
-            this.recordNum = recordNum;
-        }
-
-        public ContentBuffer getContentBuffer() {
-            return contentBuffer;
-        }
-
-        public WriteRequestMeta.RecordMeta getRecordMeta() {
-            return writeRequestMeta.getRecordMetaOrThrow(recordNum);
-        }
-
-        public CrawledContent getRevisitRef() {
-            return revisitRef;
-        }
-
-        public String getWarcId() {
-            return contentBuffer.getWarcId();
-        }
-
-        public RecordType getRecordType() {
-            return getRecordMeta().getType();
-        }
-
-        public SubCollectionType getSubCollectionType() {
-            return getRecordMeta().getSubCollection();
-        }
-
-        public String getTargetUri() {
-            return writeRequestMeta.getTargetUri();
-        }
-
-        public Timestamp getFetchTimeStamp() {
-            return writeRequestMeta.getFetchTimeStamp();
-        }
-
-        public String getIpAddress() {
-            return writeRequestMeta.getIpAddress();
-        }
-
-        public List<String> getWarcConcurrentToIds() {
-            List<String> ids = recordDataMap.values().stream()
-                    .map(cb -> cb.getContentBuffer().getWarcId())
-                    .collect(Collectors.toList());
-            ids.addAll(getRecordMeta().getWarcConcurrentToList());
-            return ids;
-        }
-
-        public void close() {
-            contentBuffer.close();
-        }
-    }
-}
-*/

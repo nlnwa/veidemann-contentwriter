@@ -50,7 +50,6 @@ func main() {
 	pflag.Parse()
 	_ = viper.BindPFlags(pflag.CommandLine)
 
-	viper.SetDefault("ContentDir", "content")
 	replacer := strings.NewReplacer("-", "_")
 	viper.SetEnvKeyReplacer(replacer)
 	viper.AutomaticEnv()

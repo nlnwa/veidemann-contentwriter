@@ -17,9 +17,10 @@
 package server
 
 import (
-	"fmt"
 	"github.com/nlnwa/gowarc"
 	"github.com/nlnwa/veidemann-api/go/config/v1"
+	"github.com/stretchr/testify/assert"
+	"regexp"
 	"testing"
 	"time"
 )
@@ -107,10 +108,50 @@ func Test_createFileRotationKey(t *testing.T) {
 
 func Test_getFilename(t *testing.T) {
 	ng := &gowarc.PatternNameGenerator{
-		Directory: "myDir",
-		Prefix:    createFilePrefix("foo", "bar", time.Now(), config.Collection_YEARLY),
+		Directory: "",
+		Prefix:    createFilePrefix("foo", config.Collection_UNDEFINED, time.Now(), config.Collection_NONE),
 		Serial:    0,
 	}
-	fmt.Printf("%s\n", ng.NewWarcfileName())
-	fmt.Printf("%s\n", ng.NewWarcfileName())
+	d1, f1 := ng.NewWarcfileName()
+	d2, f2 := ng.NewWarcfileName()
+	assert.Regexp(t, regexp.MustCompile(`foo-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f1)
+	assert.Equal(t, "", d1)
+	assert.Regexp(t, regexp.MustCompile(`foo-\d{14}-0002-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f2)
+	assert.Equal(t, "", d2)
+
+	ng = &gowarc.PatternNameGenerator{
+		Directory: "",
+		Prefix:    createFilePrefix("foo", config.Collection_UNDEFINED, time.Now(), config.Collection_YEARLY),
+		Serial:    0,
+	}
+	d1, f1 = ng.NewWarcfileName()
+	d2, f2 = ng.NewWarcfileName()
+	assert.Regexp(t, regexp.MustCompile(`foo_\d{4}-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f1)
+	assert.Equal(t, "", d1)
+	assert.Regexp(t, regexp.MustCompile(`foo_\d{4}-\d{14}-0002-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f2)
+	assert.Equal(t, "", d2)
+
+	ng = &gowarc.PatternNameGenerator{
+		Directory: "myDir",
+		Prefix:    createFilePrefix("foo", config.Collection_DNS, time.Now(), config.Collection_MONTHLY),
+		Serial:    0,
+	}
+	d1, f1 = ng.NewWarcfileName()
+	d2, f2 = ng.NewWarcfileName()
+	assert.Regexp(t, regexp.MustCompile(`foo_DNS_\d{6}-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f1)
+	assert.Equal(t, "myDir", d1)
+	assert.Regexp(t, regexp.MustCompile(`foo_DNS_\d{6}-\d{14}-0002-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f2)
+	assert.Equal(t, "myDir", d2)
+
+	ng = &gowarc.PatternNameGenerator{
+		Directory: "myDir",
+		Prefix:    createFilePrefix("foo", config.Collection_DNS, time.Now(), config.Collection_DAILY),
+		Serial:    0,
+	}
+	d1, f1 = ng.NewWarcfileName()
+	d2, f2 = ng.NewWarcfileName()
+	assert.Regexp(t, regexp.MustCompile(`foo_DNS_\d{8}-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f1)
+	assert.Equal(t, "myDir", d1)
+	assert.Regexp(t, regexp.MustCompile(`foo_DNS_\d{8}-\d{14}-0002-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f2)
+	assert.Equal(t, "myDir", d2)
 }

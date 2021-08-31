@@ -18,7 +18,6 @@ package server
 
 import (
 	"fmt"
-	"github.com/nlnwa/gowarc"
 	"github.com/nlnwa/veidemann-contentwriter/database"
 	"github.com/nlnwa/veidemann-contentwriter/settings"
 	"google.golang.org/grpc/codes"
@@ -49,7 +48,8 @@ func New(host string, port int, settings settings.Settings, configCache database
 		settings:    settings,
 		configCache: configCache,
 		service: &ContentWriterService{
-			warcWriterRegistry: newWarcWriterRegistry(settings),
+			settings:           settings,
+			warcWriterRegistry: newWarcWriterRegistry(settings, configCache),
 			configCache:        configCache,
 		},
 	}
@@ -68,10 +68,6 @@ func (s *GrpcServer) Start() error {
 		grpc.StreamInterceptor(otgrpc.OpenTracingStreamServerInterceptor(tracer)),
 	}
 	s.grpcServer = grpc.NewServer(opts...)
-	s.service = &ContentWriterService{
-		warcWriterRegistry: newWarcWriterRegistry(s.settings),
-		configCache:        s.configCache,
-	}
 	contentwriter.RegisterContentWriterServer(s.grpcServer, s.service)
 
 	log.Info().Msgf("ContentWriter Service listening on %s", lis.Addr())
@@ -86,6 +82,7 @@ func (s *GrpcServer) Shutdown() {
 
 type ContentWriterService struct {
 	contentwriter.UnimplementedContentWriterServer
+	settings           settings.Settings
 	configCache        database.ConfigCache
 	warcWriterRegistry *warcWriterRegistry
 }
@@ -93,7 +90,7 @@ type ContentWriterService struct {
 func (s *ContentWriterService) Write(stream contentwriter.ContentWriter_WriteServer) error {
 	telemetry.ScopechecksTotal.Inc()
 	//telemetry.ScopecheckResponseTotal.With(prometheus.Labels{"code": strconv.Itoa(int(result.ExcludeReason))}).Inc()
-	ctx := newWriteSessionContext(s.configCache)
+	ctx := newWriteSessionContext(s.settings, s.configCache)
 
 	for {
 		request, err := stream.Recv()
@@ -185,69 +182,16 @@ func (s *ContentWriterService) onCompleted(context *writeSessionContext, stream 
 	}
 
 	for n, m := range context.meta.RecordMeta {
-		// TODO: Detect revisit
 		record := context.records[n]
 		writer := s.warcWriterRegistry.GetWarcWriter(context.collectionConfig, m)
-		writer.fileWriter.Write(record)
-		reply.Meta.RecordMeta[n] = &contentwriter.WriteResponseMeta_RecordMeta{
-			RecordNum:           n,
-			Type:                0,
-			WarcId:              record.WarcHeader().Get(gowarc.WarcRecordID),
-			StorageRef:          "",
-			BlockDigest:         record.WarcHeader().Get(gowarc.WarcBlockDigest),
-			PayloadDigest:       record.WarcHeader().Get(gowarc.WarcPayloadDigest),
-			RevisitReferenceId:  "",
-			CollectionFinalName: "",
+		writeResponseMeta, err := writer.Write(n, record, context.meta)
+		if err != nil {
+			context.cancelSession("Failed writing record: " + err.Error())
+			return err
 		}
+
+		reply.Meta.RecordMeta[n] = writeResponseMeta
 	}
 
 	return stream.SendAndClose(reply)
-	//WarcCollection	collection = warcCollectionRegistry.getWarcCollection(context.getCollectionConfig())
-	//try(Instance	warcWriters = collection.getWarcWriters()) {
-	//	for Integer
-	//recordNum:
-	//	context.getRecordNums()) {
-	//		try(RecordData			recordData = context.getRecordData(recordNum)) {
-	//			context.detectRevisit(recordNum, collection)
-	//
-	//			URI				ref = warcWriters.getWarcWriter(recordData.getSubCollectionType()).writeRecord(recordData)
-	//
-	//			WriteResponseMeta.RecordMeta.Builder				responseMeta = WriteResponseMeta.RecordMeta.newBuilder()
-	//			.setRecordNum(recordNum)
-	//			.setType(recordData.getRecordType())
-	//			.setWarcId(recordData.getWarcId())
-	//			.setStorageRef(ref.toString())
-	//			.setBlockDigest(recordData.getContentBuffer().getBlockDigest())
-	//			.setPayloadDigest(recordData.getContentBuffer().getPayloadDigest())
-	//			.setCollectionFinalName(collection.getCollectionName(recordData.getSubCollectionType()))
-	//			if recordData.getRevisitRef() != null {
-	//				responseMeta.setRevisitReferenceId(recordData.getRevisitRef().getWarcId())
-	//			}
-	//
-	//			reply.getMetaBuilder().putRecordMeta(responseMeta.getRecordNum(), responseMeta.build())
-	//		}
-	//		catch(IOException			ex) {
-	//			Status				status = Status.UNKNOWN.withDescription(ex.toString())
-	//			LOG.error("Failed write: {}", ex.getMessage(), ex)
-	//			responseObserver.onError(status.asException())
-	//		}
-	//		catch(SingleWarcWriter.SizeMismatchException			ex) {
-	//			Status
-	//			status = Status.OUT_OF_RANGE.withDescription(ex.getMessage())
-	//			LOG.error(status.getDescription())
-	//			throw				status.asException()
-	//		}
-	//		catch(Exception			ex) {
-	//			LOG.error("Failed write: {}", ex.getMessage(), ex)
-	//			responseObserver.onError(Status.fromThrowable(ex).asException())
-	//		}
-	//	}
-	//	responseObserver.onNext(reply.build())
-	//	responseObserver.onCompleted()
-	//}
-	//catch(Exception	ex) {
-	//	Status		status = Status.UNKNOWN.withDescription(ex.toString())
-	//	LOG.error(ex.getMessage(), ex)
-	//	responseObserver.onError(status.asException())
-	//}
 }

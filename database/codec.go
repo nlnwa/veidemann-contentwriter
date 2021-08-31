@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	configV1 "github.com/nlnwa/veidemann-api/go/config/v1"
+	"github.com/nlnwa/veidemann-api/go/contentwriter/v1"
 	frontierV1 "github.com/nlnwa/veidemann-api/go/frontier/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -63,10 +64,29 @@ var decodeCrawlExecutionStatus = func(encoded interface{}, value reflect.Value) 
 	return nil
 }
 
+var decodeCrawledContent = func(encoded interface{}, value reflect.Value) error {
+	b, err := json.Marshal(encoded)
+	if err != nil {
+		return fmt.Errorf("error decoding CrawledContent: %w", err)
+	}
+
+	var co contentwriter.CrawledContent
+	unmarshaller := protojson.UnmarshalOptions{
+		AllowPartial:   true,
+		DiscardUnknown: true,
+	}
+	if err := unmarshaller.Unmarshal(b, &co); err != nil {
+		return fmt.Errorf("error decoding CrawledContent: %w", err)
+	}
+
+	value.Set(reflect.ValueOf(co))
+	return nil
+}
+
 var encodeProtoMessage = func(value interface{}) (i interface{}, err error) {
 	b, err := protojson.Marshal(value.(proto.Message))
 	if err != nil {
-		return nil, fmt.Errorf("error decoding ConfigObject: %w", err)
+		return nil, fmt.Errorf("error decoding proto message: %w", err)
 	}
 
 	var m map[string]interface{}
@@ -87,6 +107,11 @@ func init() {
 		reflect.TypeOf(&frontierV1.CrawlExecutionStatus{}),
 		encodeProtoMessage,
 		decodeCrawlExecutionStatus,
+	)
+	encoding.SetTypeEncoding(
+		reflect.TypeOf(&contentwriter.CrawledContent{}),
+		encodeProtoMessage,
+		decodeCrawledContent,
 	)
 	encoding.SetTypeEncoding(
 		reflect.TypeOf(map[string]interface{}{}),

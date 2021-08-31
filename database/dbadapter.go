@@ -19,17 +19,20 @@ package database
 import (
 	"context"
 	configV1 "github.com/nlnwa/veidemann-api/go/config/v1"
+	"github.com/nlnwa/veidemann-api/go/contentwriter/v1"
 	"time"
 )
 
 type ConfigCache interface {
 	GetConfigObject(context.Context, *configV1.ConfigRef) (*configV1.ConfigObject, error)
-	//GetScripts(context.Context, *configV1.BrowserConfig) ([]*configV1.ConfigObject, error)
+	HasCrawledContent(ctx context.Context, revisitKey string) (*contentwriter.CrawledContent, error)
+	WriteCrawledContent(ctx context.Context, crawledContent *contentwriter.CrawledContent) error
 }
 
 type DbAdapter interface {
 	GetConfigObject(context.Context, *configV1.ConfigRef) (*configV1.ConfigObject, error)
-	//GetConfigsForSelector(context.Context, configV1.Kind, *configV1.Label) ([]*configV1.ConfigObject, error)
+	HasCrawledContent(ctx context.Context, revisitKey string) (*contentwriter.CrawledContent, error)
+	WriteCrawledContent(ctx context.Context, crawledContent *contentwriter.CrawledContent) error
 }
 
 type configCache struct {
@@ -59,46 +62,10 @@ func (cc *configCache) GetConfigObject(ctx context.Context, ref *configV1.Config
 
 	return result, nil
 }
+func (cc *configCache) HasCrawledContent(ctx context.Context, revisitKey string) (*contentwriter.CrawledContent, error) {
+	return cc.db.HasCrawledContent(ctx, revisitKey)
+}
 
-// getConfigsForSelector fetches configObjects by selector string (key:value)
-//func (cc *configCache) getConfigsForSelector(ctx context.Context, selector string) ([]*configV1.ConfigObject, error) {
-//	cached := cc.cache.GetMany(selector)
-//	if cached != nil {
-//		return cached, nil
-//	}
-//
-//	t := strings.Split(selector, ":")
-//	label := &configV1.Label{
-//		Key:   t[0],
-//		Value: t[1],
-//	}
-//
-//	res, err := cc.db.GetConfigsForSelector(ctx, configV1.Kind_browserScript, label)
-//	if err != nil {
-//		return nil, err
-//	}
-//	cc.cache.SetMany(selector, res)
-//
-//	return res, nil
-//}
-
-//func (cc *configCache) GetScripts(ctx context.Context, browserConfig *configV1.BrowserConfig) ([]*configV1.ConfigObject, error) {
-//	var scripts []*configV1.ConfigObject
-//	for _, scriptRef := range browserConfig.ScriptRef {
-//		script, err := cc.GetConfigObject(ctx, scriptRef)
-//		if err != nil {
-//			return nil, fmt.Errorf("failed to get script by reference %v: %w", scriptRef, err)
-//		}
-//		scripts = append(scripts, script)
-//	}
-//	for _, selector := range browserConfig.ScriptSelector {
-//		configs, err := cc.getConfigsForSelector(ctx, selector)
-//		if err != nil {
-//			return nil, fmt.Errorf("failed to get scripts by selector %s: %w", selector, err)
-//		}
-//		for _, config := range configs {
-//			scripts = append(scripts, config)
-//		}
-//	}
-//	return scripts, nil
-//}
+func (cc *configCache) WriteCrawledContent(ctx context.Context, crawledContent *contentwriter.CrawledContent) error {
+	return cc.db.WriteCrawledContent(ctx, crawledContent)
+}

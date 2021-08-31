@@ -19,6 +19,7 @@ package database
 import (
 	"context"
 	configV1 "github.com/nlnwa/veidemann-api/go/config/v1"
+	"github.com/nlnwa/veidemann-api/go/contentwriter/v1"
 	r "gopkg.in/rethinkdb/rethinkdb-go.v6"
 	"time"
 )
@@ -53,6 +54,10 @@ func (c *MockConnection) GetConfigObject(ctx context.Context, ref *configV1.Conf
 	return c.RethinkDbConnection.GetConfigObject(ctx, ref)
 }
 
-//func (c *MockConnection) GetConfigsForSelector(ctx context.Context, kind configV1.Kind, label *configV1.Label) ([]*configV1.ConfigObject, error) {
-//	return c.RethinkDbConnection.GetConfigsForSelector(ctx, kind, label)
-//}
+func (c *MockConnection) HasCrawledContent(ctx context.Context, revisitKey string) (*contentwriter.CrawledContent, error) {
+	return c.RethinkDbConnection.HasCrawledContent(ctx, revisitKey)
+}
+
+func (c *MockConnection) WriteCrawledContent(ctx context.Context, crawledContent *contentwriter.CrawledContent) error {
+	return c.RethinkDbConnection.WriteCrawledContent(ctx, crawledContent)
+}

@@ -19,18 +19,20 @@ package server
 import (
 	"github.com/nlnwa/veidemann-api/go/config/v1"
 	"github.com/nlnwa/veidemann-api/go/contentwriter/v1"
+	"github.com/nlnwa/veidemann-contentwriter/database"
 	"github.com/nlnwa/veidemann-contentwriter/settings"
 	"sync"
 )
 
 type warcWriterRegistry struct {
 	settings    settings.Settings
+	dbAdapter   database.DbAdapter
 	warcWriters map[string]*warcWriter
 	lock        sync.Mutex
 }
 
-func newWarcWriterRegistry(settings settings.Settings) *warcWriterRegistry {
-	return &warcWriterRegistry{settings: settings, warcWriters: make(map[string]*warcWriter)}
+func newWarcWriterRegistry(settings settings.Settings, db database.DbAdapter) *warcWriterRegistry {
+	return &warcWriterRegistry{settings: settings, warcWriters: make(map[string]*warcWriter), dbAdapter: db}
 }
 
 func (w *warcWriterRegistry) GetWarcWriter(collectionConf *config.ConfigObject, recordMeta *contentwriter.WriteRequestMeta_RecordMeta) *warcWriter {
@@ -42,7 +44,7 @@ func (w *warcWriterRegistry) GetWarcWriter(collectionConf *config.ConfigObject, 
 		return ww
 	}
 
-	ww := newWarcWriter(w.settings, collectionConf, recordMeta)
+	ww := newWarcWriter(w.settings, w.dbAdapter, collectionConf, recordMeta)
 	w.warcWriters[key] = ww
 	return ww
 }
@@ -52,21 +54,6 @@ func (w *warcWriterRegistry) Shutdown() {
 	defer w.lock.Unlock()
 
 	for _, ww := range w.warcWriters {
-		if ww.timer != nil {
-			ww.timer.Stop()
-		}
-		_ = ww.fileWriter.Shutdown()
+		ww.Shutdown()
 	}
 }
-
-//func (w *warcWriterRegistry) warcWriter(config config.ConfigObject) gowarc.WarcFileWriter {
-//	c, ok := w.warcWriters[config.GetId()]
-//	if !ok {
-//		w.warcWriters[config.GetId()] = gowarc.NewWarcFileWriter()
-//	} else if c.shouldFlushFiles(config, ProtoUtils.getNowOdt()) {
-//		c.Close()
-//		//c = new WarcCollection(config);
-//		w.warcWriters[config.GetId()] = gowarc.NewWarcFileWriter()
-//	}
-//	return c
-//}

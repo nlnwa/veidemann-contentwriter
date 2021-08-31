@@ -17,48 +17,210 @@
 package server
 
 import (
+	"context"
 	"github.com/nlnwa/gowarc"
 	"github.com/nlnwa/veidemann-api/go/config/v1"
 	"github.com/nlnwa/veidemann-api/go/contentwriter/v1"
+	"github.com/nlnwa/veidemann-contentwriter/database"
 	"github.com/nlnwa/veidemann-contentwriter/settings"
+	"github.com/rs/zerolog/log"
+	"strconv"
+	"sync"
 	"time"
 )
 
+// now is a function so that tests can override the clock.
+var now = time.Now
+
+const warcFileScheme = "warcfile"
+
 type warcWriter struct {
-	fileWriter *gowarc.WarcFileWriter
-	timer      *time.Timer
+	settings         settings.Settings
+	collectionConfig *config.ConfigObject
+	subCollection    config.Collection_SubCollectionType
+	filePrefix       string
+	fileWriter       *gowarc.WarcFileWriter
+	dbAdapter        database.DbAdapter
+	timer            *time.Timer
+	done             chan interface{}
+	lock             sync.Mutex
 }
 
-func newWarcWriter(s settings.Settings, c *config.ConfigObject, recordMeta *contentwriter.WriteRequestMeta_RecordMeta) *warcWriter {
+func newWarcWriter(s settings.Settings, db database.DbAdapter, c *config.ConfigObject, recordMeta *contentwriter.WriteRequestMeta_RecordMeta) *warcWriter {
 	collectionConfig := c.GetCollection()
-	subCollection := ""
-	if recordMeta.GetSubCollection() != config.Collection_UNDEFINED {
-		subCollection = recordMeta.GetSubCollection().String()
-	}
-
-	prefix := createFilePrefix(c.Meta.Name, subCollection, time.Now(), collectionConfig.GetFileRotationPolicy())
-	namer := &gowarc.PatternNameGenerator{
-		Directory: s.WarcDir(),
-		Prefix:    prefix,
-	}
-
-	opts := []gowarc.WarcFileWriterOption{
-		gowarc.WithCompression(collectionConfig.GetCompress()),
-		gowarc.WithMaxFileSize(collectionConfig.GetFileSize()),
-		gowarc.WithFileNameGenerator(namer),
-		gowarc.WithWarcInfoFunc(warcInfoGenerator),
-		gowarc.WithMaxConcurrentWriters(s.WarcWriterPoolSize()),
-	}
-
 	ww := &warcWriter{
-		fileWriter: gowarc.NewWarcFileWriter(opts...),
+		settings:         s,
+		dbAdapter:        db,
+		collectionConfig: c,
+		subCollection:    recordMeta.GetSubCollection(),
+		filePrefix:       createFilePrefix(c.GetMeta().GetName(), recordMeta.GetSubCollection(), now(), c.GetCollection().GetCollectionDedupPolicy()),
 	}
+	ww.initFileWriter()
 
-	if d, ok := timeToNextRotation(time.Now(), collectionConfig.GetFileRotationPolicy()); ok {
+	rotationPolicy := collectionConfig.GetFileRotationPolicy()
+	dedupPolicy := collectionConfig.GetCollectionDedupPolicy()
+	if dedupPolicy != config.Collection_NONE && dedupPolicy < rotationPolicy {
+		rotationPolicy = dedupPolicy
+	}
+	if d, ok := timeToNextRotation(now(), rotationPolicy); ok {
 		ww.timer = time.NewTimer(d)
+		ww.done = make(chan interface{})
+		go func() {
+			for {
+				if !ww.waitForTimer(rotationPolicy) {
+					break
+				}
+			}
+		}()
 	}
 
 	return ww
+}
+
+func (ww *warcWriter) CollectionName() string {
+	return ww.filePrefix[:len(ww.filePrefix)-1]
+}
+
+func (ww *warcWriter) Write(recordNum int32, record gowarc.WarcRecord, meta *contentwriter.WriteRequestMeta) (*contentwriter.WriteResponseMeta_RecordMeta, error) {
+	ww.lock.Lock()
+	defer ww.lock.Unlock()
+	var revisitKey string
+	record, revisitKey = ww.detectRevisit(recordNum, record, meta)
+	offset, fileName, _, err := ww.fileWriter.Write(record)
+	if err == nil && revisitKey != "" {
+		cr := &contentwriter.CrawledContent{
+			Digest:    revisitKey,
+			WarcId:    record.WarcHeader().Get(gowarc.WarcRecordID),
+			TargetUri: meta.GetTargetUri(),
+			Date:      meta.GetFetchTimeStamp(),
+		}
+		if err := ww.dbAdapter.WriteCrawledContent(context.TODO(), cr); err != nil {
+			log.Err(err).Msg("Could not write CrawledContent to DB")
+		}
+	}
+	storageRef := warcFileScheme + ":" + fileName + ":" + strconv.FormatInt(offset, 10)
+	collectionFinalName := ww.filePrefix[:len(ww.filePrefix)-1]
+
+	reply := &contentwriter.WriteResponseMeta_RecordMeta{
+		RecordNum:           recordNum,
+		Type:                FromGowarcRecordType(record.Type()),
+		WarcId:              record.WarcHeader().Get(gowarc.WarcRecordID),
+		StorageRef:          storageRef,
+		BlockDigest:         record.WarcHeader().Get(gowarc.WarcBlockDigest),
+		PayloadDigest:       record.WarcHeader().Get(gowarc.WarcPayloadDigest),
+		RevisitReferenceId:  record.WarcHeader().Get(gowarc.WarcRefersTo),
+		CollectionFinalName: collectionFinalName,
+	}
+	return reply, err
+}
+
+func (ww *warcWriter) detectRevisit(recordNum int32, record gowarc.WarcRecord, meta *contentwriter.WriteRequestMeta) (gowarc.WarcRecord, string) {
+	if record.Type() == gowarc.Response || record.Type() == gowarc.Resource {
+		digest := record.WarcHeader().Get(gowarc.WarcPayloadDigest)
+		if digest == "" {
+			digest = record.WarcHeader().Get(gowarc.WarcBlockDigest)
+		}
+		revisitKey := digest + ":" + ww.filePrefix[:len(ww.filePrefix)-1]
+		duplicate, err := ww.dbAdapter.HasCrawledContent(context.TODO(), revisitKey)
+		if err != nil {
+			log.Err(err).Msg("Failed checking for revisit, treating as new object")
+		}
+
+		if duplicate != nil {
+			log.Debug().Msgf("Detected %s as a revisit of %s",
+				record.WarcHeader().Get(gowarc.WarcTargetURI), duplicate.GetWarcId())
+			ref := &gowarc.RevisitRef{
+				Profile:        gowarc.ProfileIdenticalPayloadDigest,
+				TargetRecordId: duplicate.GetWarcId(),
+				TargetUri:      duplicate.GetTargetUri(),
+				TargetDate:     duplicate.GetDate().AsTime().In(time.UTC).Format(time.RFC3339),
+			}
+			revisit, err := record.ToRevisitRecord(ref)
+			if err != nil {
+				log.Err(err).Msg("Failed checking for revisit, treating as new object")
+			}
+
+			newRecordMeta := meta.GetRecordMeta()[recordNum]
+			newRecordMeta.Type = contentwriter.RecordType_REVISIT
+			newRecordMeta.BlockDigest = revisit.Block().BlockDigest()
+			if r, ok := revisit.Block().(gowarc.PayloadBlock); ok {
+				newRecordMeta.PayloadDigest = r.PayloadDigest()
+			}
+
+			size, err := strconv.ParseInt(revisit.WarcHeader().Get(gowarc.ContentLength), 10, 64)
+			if err != nil {
+				log.Err(err).Msg("Failed checking for revisit, treating as new object")
+			}
+			newRecordMeta.Size = size
+			meta.GetRecordMeta()[recordNum] = newRecordMeta
+			return revisit, revisitKey
+		}
+	}
+	return record, ""
+}
+
+func (ww *warcWriter) initFileWriter() {
+	c := ww.collectionConfig.GetCollection()
+	namer := &gowarc.PatternNameGenerator{
+		Directory: ww.settings.WarcDir(),
+		Prefix:    ww.filePrefix,
+	}
+
+	opts := []gowarc.WarcFileWriterOption{
+		gowarc.WithCompression(c.GetCompress()),
+		gowarc.WithMaxFileSize(c.GetFileSize()),
+		gowarc.WithFileNameGenerator(namer),
+		gowarc.WithWarcInfoFunc(warcInfoGenerator),
+		gowarc.WithMaxConcurrentWriters(ww.settings.WarcWriterPoolSize()),
+	}
+
+	ww.fileWriter = gowarc.NewWarcFileWriter(opts...)
+}
+
+func (ww *warcWriter) waitForTimer(rotationPolicy config.Collection_RotationPolicy) bool {
+	select {
+	case <-ww.done:
+	case <-ww.timer.C:
+		c := ww.collectionConfig.GetCollection()
+		prefix := createFilePrefix(ww.collectionConfig.GetMeta().GetName(), ww.subCollection, now(), c.GetCollectionDedupPolicy())
+		if prefix != ww.filePrefix {
+			ww.lock.Lock()
+			defer ww.lock.Unlock()
+			ww.filePrefix = prefix
+			o := ww.fileWriter
+			ww.fileWriter = nil
+			ww.initFileWriter()
+			if err := o.Shutdown(); err != nil {
+				log.Err(err).Msg("failed shutting down file writer")
+			}
+		} else {
+			if err := ww.fileWriter.Close(); err != nil {
+				log.Err(err).Msg("failed closing file")
+			}
+		}
+
+		if d, ok := timeToNextRotation(now(), rotationPolicy); ok {
+			ww.timer.Reset(d)
+		}
+		return true
+	}
+
+	// We still need to check the return value
+	// of Stop, because timer could have fired
+	// between the receive on done and this line.
+	if !ww.timer.Stop() {
+		<-ww.timer.C
+	}
+	return false
+}
+
+func (ww *warcWriter) Shutdown() {
+	if ww.timer != nil {
+		close(ww.done)
+	}
+	if err := ww.fileWriter.Shutdown(); err != nil {
+		log.Err(err).Msg("failed shutting down file writer")
+	}
 }
 
 func timeToNextRotation(now time.Time, p config.Collection_RotationPolicy) (time.Duration, bool) {
@@ -96,11 +258,12 @@ func createFileRotationKey(now time.Time, p config.Collection_RotationPolicy) st
 	}
 }
 
-func createFilePrefix(collectionName, subCollectionName string, ts time.Time, p config.Collection_RotationPolicy) string {
-	if subCollectionName != "" {
-		collectionName += "_" + subCollectionName
+func createFilePrefix(collectionName string, subCollection config.Collection_SubCollectionType, ts time.Time, dedupPolicy config.Collection_RotationPolicy) string {
+	if subCollection != config.Collection_UNDEFINED {
+		collectionName += "_" + subCollection.String()
 	}
-	dedupRotationKey := createFileRotationKey(ts, p)
+
+	dedupRotationKey := createFileRotationKey(ts, dedupPolicy)
 	if dedupRotationKey == "" {
 		return collectionName + "-"
 	} else {

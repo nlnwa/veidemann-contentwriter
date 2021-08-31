@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	configV1 "github.com/nlnwa/veidemann-api/go/config/v1"
+	"github.com/nlnwa/veidemann-api/go/contentwriter/v1"
 	"github.com/rs/zerolog/log"
 	r "gopkg.in/rethinkdb/rethinkdb-go.v6"
 	"time"
@@ -104,33 +105,47 @@ func (c *RethinkDbConnection) GetConfigObject(ctx context.Context, ref *configV1
 	return &result, nil
 }
 
-//// GetConfigsForSelector fetches a list of config.ConfigObject's matching config.Kind and config.Label
-//func (c *RethinkDbConnection) GetConfigsForSelector(ctx context.Context, kind configV1.Kind, label *configV1.Label) ([]*configV1.ConfigObject, error) {
-//	term := r.Table("config").GetAllByIndex("label", r.Expr([]string{label.Key, label.Value})).
-//		Filter(func(row r.Term) r.Term {
-//			return row.Field("kind").Eq(kind.String())
-//		})
-//	res, err := c.execRead(ctx, "get-configs-by-label", &term)
-//	if err != nil {
-//		return nil, err
-//	}
-//	defer func() {
-//		_ = res.Close()
-//	}()
-//
-//	var configObject configV1.ConfigObject
-//	var configObjects []*configV1.ConfigObject
-//	for res.Next(&configObject) {
-//		//noinspection GoVetCopyLock
-//		aCopy := configObject
-//		configObjects = append(configObjects, &aCopy)
-//	}
-//	if err := res.Err(); err != nil {
-//		return nil, err
-//	}
-//
-//	return configObjects, nil
-//}
+func (c *RethinkDbConnection) HasCrawledContent(ctx context.Context, payloadDigest string) (*contentwriter.CrawledContent, error) {
+	if payloadDigest == "" {
+		return nil, fmt.Errorf("The required field 'digest' is missing from: 'crawledContent'")
+	}
+
+	term := r.Table("crawled_content").Get(payloadDigest)
+	response, err := c.execRead(ctx, "db-hasCrawledContent", &term)
+	if err != nil {
+		return nil, err
+	}
+
+	if response.IsNil() {
+		return nil, nil
+	} else {
+		var res contentwriter.CrawledContent
+		response.One(&res)
+		return &res, nil
+	}
+}
+
+func (c *RethinkDbConnection) WriteCrawledContent(ctx context.Context, crawledContent *contentwriter.CrawledContent) error {
+	if crawledContent.Digest == "" {
+		return fmt.Errorf("The required field 'digest' is missing from: 'crawledContent'")
+	}
+	if crawledContent.WarcId == "" {
+		return fmt.Errorf("The required field 'warc_id' is missing from: 'crawledContent'")
+	}
+	if crawledContent.TargetUri == "" {
+		return fmt.Errorf("The required field 'target_uri' is missing from: 'crawledContent'")
+	}
+	if crawledContent.Date == nil {
+		return fmt.Errorf("The required field 'date' is missing from: 'crawledContent'")
+	}
+
+	term := r.Table("crawled_content").Insert(crawledContent)
+	err := c.execWrite(ctx, "db-writeCrawledContent", &term)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 // execRead executes the given read term with a timeout
 func (c *RethinkDbConnection) execRead(ctx context.Context, name string, term *r.Term) (*r.Cursor, error) {
