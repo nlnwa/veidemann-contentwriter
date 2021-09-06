@@ -16,6 +16,8 @@
 
 package settings
 
+import "github.com/nlnwa/gowarc"
+
 type Mock struct {
 	hostName                      string
 	warcDir                       string
@@ -46,4 +48,8 @@ func (m Mock) WorkDir() string {
 
 func (m Mock) TerminationGracePeriodSeconds() int {
 	return m.terminationGracePeriodSeconds
+}
+
+func (m Mock) WarcVersion() *gowarc.WarcVersion {
+	return gowarc.V1_1
 }

@@ -30,13 +30,12 @@ var logger = log.With().Str("component", "rethinkdb").Logger()
 
 // RethinkDbConnection holds the database connection
 type RethinkDbConnection struct {
-	connectOpts        r.ConnectOpts
-	session            r.QueryExecutor
-	maxRetries         int
-	waitTimeout        time.Duration
-	queryTimeout       time.Duration
-	maxOpenConnections int
-	batchSize          int
+	connectOpts  r.ConnectOpts
+	session      r.QueryExecutor
+	maxRetries   int
+	waitTimeout  time.Duration
+	queryTimeout time.Duration
+	batchSize    int
 }
 
 type Options struct {

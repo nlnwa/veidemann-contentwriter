@@ -16,7 +16,10 @@
 
 package settings
 
-import "github.com/spf13/viper"
+import (
+	"github.com/nlnwa/gowarc"
+	"github.com/spf13/viper"
+)
 
 type Settings interface {
 	HostName() string
@@ -24,6 +27,7 @@ type Settings interface {
 	WarcWriterPoolSize() int
 	WorkDir() string
 	TerminationGracePeriodSeconds() int
+	WarcVersion() *gowarc.WarcVersion
 }
 
 type ViperSettings struct{}
@@ -46,4 +50,8 @@ func (s ViperSettings) WorkDir() string {
 
 func (s ViperSettings) TerminationGracePeriodSeconds() int {
 	return viper.GetInt("termination-grace-period-seconds")
+}
+
+func (s ViperSettings) WarcVersion() *gowarc.WarcVersion {
+	return gowarc.V1_1
 }

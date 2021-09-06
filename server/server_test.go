@@ -27,10 +27,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	r "gopkg.in/rethinkdb/rethinkdb-go.v6"
 	"io/ioutil"
 	"net"
 	"os"
+	"regexp"
 	"testing"
 	"time"
 )
@@ -118,7 +120,7 @@ var writeReq1 writeRequests = writeRequests{
 				PayloadDigest:     "sha1:C37FFB221569C553A2476C22C7DAD429F3492977",
 			},
 		},
-		FetchTimeStamp: nil,
+		FetchTimeStamp: timestamppb.Now(),
 		IpAddress:      "127.0.0.1",
 		CollectionRef:  &config.ConfigRef{Kind: config.Kind_collection, Id: "c1"},
 	}}},
@@ -190,6 +192,16 @@ func TestContentWriterService_Write(t *testing.T) {
 		On(r.Table("crawled_content").Get("sha1:C37FFB221569C553A2476C22C7DAD429F3492977:c1_2000101002")).
 		Return(nil, nil).Once()
 
+	s := map[string]interface{}{
+		"date":      r.MockAnything(),
+		"digest":    "sha1:C37FFB221569C553A2476C22C7DAD429F3492977:c1_2000101002",
+		"targetUri": "http://www.example.com/foo.html",
+		"warcId":    r.MockAnything(),
+	}
+
+	serverAndClient.dbMock.
+		On(r.Table("crawled_content").Insert(s)).Return(&r.WriteResponse{Inserted: 1}, nil)
+
 	ctx := context.Background()
 	assert := assert.New(t)
 
@@ -203,6 +215,8 @@ func TestContentWriterService_Write(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(2, len(reply.Meta.RecordMeta))
 
+	fileNamePattern := `c1_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc`
+
 	assert.Equal(int32(0), reply.Meta.RecordMeta[0].RecordNum)
 	assert.Equal(contentwriter.RecordType_REQUEST, reply.Meta.RecordMeta[0].Type)
 	assert.Regexp("<urn:uuid:.{8}-.{4}-.{4}-.{4}-.{12}>", reply.Meta.RecordMeta[0].WarcId)
@@ -210,7 +224,7 @@ func TestContentWriterService_Write(t *testing.T) {
 	assert.Equal("sha1:DA39A3EE5E6B4B0D3255BFEF95601890AFD80709", reply.Meta.RecordMeta[0].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[0].CollectionFinalName)
 	assert.Equal("", reply.Meta.RecordMeta[0].RevisitReferenceId)
-	assert.Regexp(`warcfile:c1_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc:326`, reply.Meta.RecordMeta[0].StorageRef)
+	assert.Regexp("warcfile:"+fileNamePattern+":430", reply.Meta.RecordMeta[0].StorageRef)
 
 	assert.Equal(int32(1), reply.Meta.RecordMeta[1].RecordNum)
 	assert.Equal(contentwriter.RecordType_RESPONSE, reply.Meta.RecordMeta[1].Type)
@@ -219,10 +233,11 @@ func TestContentWriterService_Write(t *testing.T) {
 	assert.Equal("sha1:C37FFB221569C553A2476C22C7DAD429F3492977", reply.Meta.RecordMeta[1].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[1].CollectionFinalName)
 	assert.Equal("", reply.Meta.RecordMeta[1].RevisitReferenceId)
-	assert.Regexp(`warcfile:c1_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc:954`, reply.Meta.RecordMeta[1].StorageRef)
+	assert.Regexp("warcfile:"+fileNamePattern+":1125", reply.Meta.RecordMeta[1].StorageRef)
 
-	listFiles(warcdir)
+	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+".open$", 1)
 	serverAndClient.close()
+	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+"$", 1)
 
 	rmDir(warcdir)
 }
@@ -258,6 +273,8 @@ func TestContentWriterService_WriteRevisit(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(2, len(reply.Meta.RecordMeta))
 
+	fileNamePattern := `c1_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc`
+
 	assert.Equal(int32(0), reply.Meta.RecordMeta[0].RecordNum)
 	assert.Equal(contentwriter.RecordType_REQUEST, reply.Meta.RecordMeta[0].Type)
 	assert.Regexp("<urn:uuid:.{8}-.{4}-.{4}-.{4}-.{12}>", reply.Meta.RecordMeta[0].WarcId)
@@ -265,7 +282,7 @@ func TestContentWriterService_WriteRevisit(t *testing.T) {
 	assert.Equal("sha1:DA39A3EE5E6B4B0D3255BFEF95601890AFD80709", reply.Meta.RecordMeta[0].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[0].CollectionFinalName)
 	assert.Equal("", reply.Meta.RecordMeta[0].RevisitReferenceId)
-	assert.Regexp(`warcfile:c1_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc:326`, reply.Meta.RecordMeta[0].StorageRef)
+	assert.Regexp(`warcfile:c1_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc:430`, reply.Meta.RecordMeta[0].StorageRef)
 
 	assert.Equal(int32(1), reply.Meta.RecordMeta[1].RecordNum)
 	assert.Equal(contentwriter.RecordType_REVISIT, reply.Meta.RecordMeta[1].Type)
@@ -274,36 +291,46 @@ func TestContentWriterService_WriteRevisit(t *testing.T) {
 	assert.Equal("sha1:C37FFB221569C553A2476C22C7DAD429F3492977", reply.Meta.RecordMeta[1].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[1].CollectionFinalName)
 	assert.Equal("<urn:uuid:fff232109-0d71-467f-b728-de86be386c6f>", reply.Meta.RecordMeta[1].RevisitReferenceId)
-	assert.Regexp(`warcfile:c1_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc:954`, reply.Meta.RecordMeta[1].StorageRef)
+	assert.Regexp(`warcfile:c1_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc:1125`, reply.Meta.RecordMeta[1].StorageRef)
 
-	listFiles(warcdir)
+	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+".open$", 1)
 	serverAndClient.close()
+	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+"$", 1)
 
 	rmDir(warcdir)
 }
 
-func listFiles(dir string) {
-	fmt.Println("----------------------")
+func dirHasFilesMatching(t *testing.T, dir string, pattern string, count int) bool {
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
 		panic(err)
 	}
 
+	found := 0
+	p := regexp.MustCompile(pattern)
 	for _, file := range files {
-		fmt.Println(file.Name())
+		if p.MatchString(file.Name()) {
+			found++
+		}
 	}
+	if found != count {
+		f := ""
+		for _, ff := range files {
+			f += "\n  " + ff.Name()
+		}
+		return assert.Fail(t, "Wrong number of files in '"+dir+"'", "Expected %d files to match %s, but found %d\nFiles in dir:%s", count, pattern, found, f)
+	}
+	return false
 }
 
 func rmDir(dir string) {
-	fmt.Println("----------------------")
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
-		panic(err)
+		return
 	}
 
 	for _, file := range files {
 		fileName := warcdir + "/" + file.Name()
-		fmt.Println("REMOVING:", fileName)
 		err = os.Remove(fileName)
 		if err != nil {
 			panic(err)

@@ -35,7 +35,6 @@ import (
 type writeSessionContext struct {
 	log              zerolog.Logger
 	settings         settings.Settings
-	dbAdapter        database.DbAdapter
 	configCache      database.ConfigCache
 	meta             *contentwriter.WriteRequestMeta
 	collectionConfig *config.ConfigObject
@@ -95,14 +94,16 @@ func (s *writeSessionContext) getRecordBuilder(recordNum int32) (gowarc.WarcReco
 		return recordBuilder, nil
 	}
 
-	opts := []gowarc.WarcRecordOption{gowarc.WithStrictValidation(), gowarc.WithBufferTmpDir(s.settings.WorkDir())}
 	recordMeta, ok := s.meta.RecordMeta[recordNum]
 	if !ok {
-		return nil, fmt.Errorf("Missing metadata for record #%d", recordNum)
+		return nil, fmt.Errorf("missing metadata for record #%d", recordNum)
 	}
 
 	rt := ToGowarcRecordType(recordMeta.Type)
-	rb := gowarc.NewRecordBuilder(rt, opts...)
+	rb := gowarc.NewRecordBuilder(rt,
+		gowarc.WithStrictValidation(),
+		gowarc.WithBufferTmpDir(s.settings.WorkDir()),
+		gowarc.WithVersion(s.settings.WarcVersion()))
 	s.recordBuilders[recordNum] = rb
 	return rb, nil
 }

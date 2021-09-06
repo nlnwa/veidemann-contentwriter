@@ -181,9 +181,10 @@ func (s *ContentWriterService) onCompleted(context *writeSessionContext, stream 
 		return err
 	}
 
-	for n, m := range context.meta.RecordMeta {
+	var n int32
+	for n = 0; n < int32(len(context.meta.RecordMeta)); n++ {
 		record := context.records[n]
-		writer := s.warcWriterRegistry.GetWarcWriter(context.collectionConfig, m)
+		writer := s.warcWriterRegistry.GetWarcWriter(context.collectionConfig, context.meta.RecordMeta[n])
 		writeResponseMeta, err := writer.Write(n, record, context.meta)
 		if err != nil {
 			context.cancelSession("Failed writing record: " + err.Error())

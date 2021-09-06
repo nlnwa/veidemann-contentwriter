@@ -24,6 +24,7 @@ import (
 	"github.com/nlnwa/veidemann-contentwriter/database"
 	"github.com/nlnwa/veidemann-contentwriter/settings"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"strconv"
 	"sync"
 	"time"
@@ -86,13 +87,18 @@ func (ww *warcWriter) Write(recordNum int32, record gowarc.WarcRecord, meta *con
 	defer ww.lock.Unlock()
 	var revisitKey string
 	record, revisitKey = ww.detectRevisit(recordNum, record, meta)
+	defer func() { _ = record.Close() }()
 	offset, fileName, _, err := ww.fileWriter.Write(record)
 	if err == nil && revisitKey != "" {
+		t, err := time.Parse(time.RFC3339, record.WarcHeader().Get(gowarc.WarcDate))
+		if err != nil {
+			log.Err(err).Msg("Could not write CrawledContent to DB")
+		}
 		cr := &contentwriter.CrawledContent{
 			Digest:    revisitKey,
 			WarcId:    record.WarcHeader().Get(gowarc.WarcRecordID),
 			TargetUri: meta.GetTargetUri(),
-			Date:      meta.GetFetchTimeStamp(),
+			Date:      timestamppb.New(t),
 		}
 		if err := ww.dbAdapter.WriteCrawledContent(context.TODO(), cr); err != nil {
 			log.Err(err).Msg("Could not write CrawledContent to DB")
@@ -128,7 +134,7 @@ func (ww *warcWriter) detectRevisit(recordNum int32, record gowarc.WarcRecord, m
 
 		if duplicate != nil {
 			log.Debug().Msgf("Detected %s as a revisit of %s",
-				record.WarcHeader().Get(gowarc.WarcTargetURI), duplicate.GetWarcId())
+				record.WarcHeader().Get(gowarc.WarcRecordID), duplicate.GetWarcId())
 			ref := &gowarc.RevisitRef{
 				Profile:        gowarc.ProfileIdenticalPayloadDigest,
 				TargetRecordId: duplicate.GetWarcId(),
@@ -153,8 +159,9 @@ func (ww *warcWriter) detectRevisit(recordNum int32, record gowarc.WarcRecord, m
 			}
 			newRecordMeta.Size = size
 			meta.GetRecordMeta()[recordNum] = newRecordMeta
-			return revisit, revisitKey
+			return revisit, ""
 		}
+		return record, revisitKey
 	}
 	return record, ""
 }
@@ -170,7 +177,7 @@ func (ww *warcWriter) initFileWriter() {
 		gowarc.WithCompression(c.GetCompress()),
 		gowarc.WithMaxFileSize(c.GetFileSize()),
 		gowarc.WithFileNameGenerator(namer),
-		gowarc.WithWarcInfoFunc(warcInfoGenerator),
+		gowarc.WithWarcInfoFunc(ww.warcInfoGenerator),
 		gowarc.WithMaxConcurrentWriters(ww.settings.WarcWriterPoolSize()),
 	}
 

@@ -16,8 +16,28 @@
 
 package server
 
-import "github.com/nlnwa/gowarc"
+import (
+	"fmt"
+	"github.com/nlnwa/gowarc"
+	"github.com/nlnwa/veidemann-api/go/config/v1"
+	"os"
+)
 
-var warcInfoGenerator = func(recordBuilder gowarc.WarcRecordBuilder) error {
-	return nil
+func (ww *warcWriter) warcInfoGenerator(recordBuilder gowarc.WarcRecordBuilder) error {
+	payload := &gowarc.WarcFields{}
+	payload.Set("format", fmt.Sprintf("WARC File Format %d.%d", ww.settings.WarcVersion().Major(), ww.settings.WarcVersion().Minor()))
+	payload.Set("collection", ww.collectionConfig.GetMeta().GetName())
+	payload.Set("description", ww.collectionConfig.GetMeta().GetDescription())
+	if ww.subCollection != config.Collection_UNDEFINED {
+		payload.Set("subCollection", ww.subCollection.String())
+	}
+	payload.Set("isPartOf", ww.CollectionName())
+	h, e := os.Hostname()
+	if e != nil {
+		return e
+	}
+	payload.Set("host", h)
+
+	_, err := recordBuilder.WriteString(payload.String())
+	return err
 }

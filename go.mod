@@ -5,14 +5,13 @@ go 1.15
 require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.0 // indirect
 	github.com/coreos/etcd v3.3.13+incompatible
-	github.com/nlnwa/gowarc v1.0.0-alpha.5
+	github.com/nlnwa/gowarc v1.0.0-alpha.7
 	github.com/nlnwa/veidemann-api/go v0.0.0-20210414094839-b36ce92632fe
 	github.com/opentracing-contrib/go-grpc v0.0.0-20210225150812-73cb765af46e
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.11.0
 	github.com/rs/zerolog v1.23.0
-	github.com/sirupsen/logrus v1.6.0 // indirect
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.8.1
 	github.com/stretchr/testify v1.7.0
