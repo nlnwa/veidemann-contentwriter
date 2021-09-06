@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	"net/http"
@@ -50,7 +51,7 @@ func NewMetricsServer(listenInterface string, listenPort int, path string) *Metr
 			ScopecheckResponseTotal,
 			CompileScriptSeconds,
 			ExecuteScriptSeconds,
-			prometheus.NewBuildInfoCollector(),
+			collectors.NewBuildInfoCollector(),
 		)
 	})
 

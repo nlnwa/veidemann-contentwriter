@@ -147,38 +147,6 @@ var writeReq1 writeRequests = writeRequests{
 	}}},
 }
 
-var writeReq2 writeRequests = writeRequests{
-	&contentwriter.WriteRequest{Value: &contentwriter.WriteRequest_Meta{Meta: &contentwriter.WriteRequestMeta{
-		ExecutionId: "eid1",
-		TargetUri:   "",
-		RecordMeta: map[int32]*contentwriter.WriteRequestMeta_RecordMeta{
-			0: {
-				RecordNum:         0,
-				Type:              contentwriter.RecordType_RESPONSE,
-				Size:              257,
-				RecordContentType: "application/http;msgtype=response",
-				BlockDigest:       "sha1:B285747AD7CC57AA74BCE2E30B453C8D1CB71BA4",
-				PayloadDigest:     "sha1:C37FFB221569C553A2476C22C7DAD429F3492977",
-			},
-		},
-		FetchTimeStamp: nil,
-		IpAddress:      "127.0.0.1",
-		CollectionRef:  &config.ConfigRef{Kind: config.Kind_collection, Id: "c1"},
-	}}},
-	&contentwriter.WriteRequest{Value: &contentwriter.WriteRequest_ProtocolHeader{ProtocolHeader: &contentwriter.Data{
-		RecordNum: 0,
-		Data: []byte(
-			"HTTP/1.1 200 OK\nDate: Tue, 19 Sep 2016 17:18:40 GMT\nServer: Apache/2.0.54 (Ubuntu)\n" +
-				"Last-Modified: Mon, 16 Jun 2013 22:28:51 GMT\nETag: \"3e45-67e-2ed02ec0\"\nAccept-Ranges: bytes\n" +
-				"Content-Length: 19\nConnection: close\nContent-Type: text/plain",
-		),
-	}}},
-	&contentwriter.WriteRequest{Value: &contentwriter.WriteRequest_Payload{Payload: &contentwriter.Data{
-		RecordNum: 0,
-		Data:      []byte("This is the content"),
-	}}},
-}
-
 func TestContentWriterService_Write(t *testing.T) {
 	err := os.Mkdir(warcdir, fileutil.PrivateDirMode)
 	assert.NoError(t, err)
