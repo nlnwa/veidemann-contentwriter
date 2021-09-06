@@ -192,7 +192,7 @@ func TestContentWriterService_Write(t *testing.T) {
 	assert.Equal("sha1:DA39A3EE5E6B4B0D3255BFEF95601890AFD80709", reply.Meta.RecordMeta[0].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[0].CollectionFinalName)
 	assert.Equal("", reply.Meta.RecordMeta[0].RevisitReferenceId)
-	assert.Regexp("warcfile:"+fileNamePattern+":430", reply.Meta.RecordMeta[0].StorageRef)
+	assert.Regexp("warcfile:"+fileNamePattern+`:\d\d\d$`, reply.Meta.RecordMeta[0].StorageRef)
 
 	assert.Equal(int32(1), reply.Meta.RecordMeta[1].RecordNum)
 	assert.Equal(contentwriter.RecordType_RESPONSE, reply.Meta.RecordMeta[1].Type)
@@ -201,7 +201,7 @@ func TestContentWriterService_Write(t *testing.T) {
 	assert.Equal("sha1:C37FFB221569C553A2476C22C7DAD429F3492977", reply.Meta.RecordMeta[1].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[1].CollectionFinalName)
 	assert.Equal("", reply.Meta.RecordMeta[1].RevisitReferenceId)
-	assert.Regexp("warcfile:"+fileNamePattern+":1125", reply.Meta.RecordMeta[1].StorageRef)
+	assert.Regexp("warcfile:"+fileNamePattern+`:\d\d\d\d$`, reply.Meta.RecordMeta[1].StorageRef)
 
 	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+".open$", 1)
 	serverAndClient.close()
