@@ -67,7 +67,7 @@ jobs:
     # Ensure test job passes before pushing image.
     needs:
       - test
-      - lint
+      - golangci
 
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
