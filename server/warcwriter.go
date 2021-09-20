@@ -87,6 +87,7 @@ func (ww *warcWriter) Write(meta *contentwriter.WriteRequestMeta, record ...gowa
 	defer ww.lock.Unlock()
 	revisitKeys := make([]string, len(record))
 	for i, r := range record {
+		r := r
 		record[i], revisitKeys[i] = ww.detectRevisit(int32(i), r, meta)
 		defer func() { _ = r.Close() }()
 	}
