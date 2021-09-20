@@ -82,40 +82,64 @@ func (ww *warcWriter) CollectionName() string {
 	return ww.filePrefix[:len(ww.filePrefix)-1]
 }
 
-func (ww *warcWriter) Write(recordNum int32, record gowarc.WarcRecord, meta *contentwriter.WriteRequestMeta) (*contentwriter.WriteResponseMeta_RecordMeta, error) {
+func (ww *warcWriter) Write(meta *contentwriter.WriteRequestMeta, record ...gowarc.WarcRecord) (*contentwriter.WriteReply, error) {
 	ww.lock.Lock()
 	defer ww.lock.Unlock()
-	var revisitKey string
-	record, revisitKey = ww.detectRevisit(recordNum, record, meta)
-	defer func() { _ = record.Close() }()
-	offset, fileName, _, err := ww.fileWriter.Write(record)
-	if err == nil && revisitKey != "" {
-		t, err := time.Parse(time.RFC3339, record.WarcHeader().Get(gowarc.WarcDate))
-		if err != nil {
-			log.Err(err).Msg("Could not write CrawledContent to DB")
-		}
-		cr := &contentwriter.CrawledContent{
-			Digest:    revisitKey,
-			WarcId:    record.WarcHeader().Get(gowarc.WarcRecordID),
-			TargetUri: meta.GetTargetUri(),
-			Date:      timestamppb.New(t),
-		}
-		if err := ww.dbAdapter.WriteCrawledContent(context.TODO(), cr); err != nil {
-			log.Err(err).Msg("Could not write CrawledContent to DB")
-		}
+	revisitKeys := make([]string, len(record))
+	for i, r := range record {
+		record[i], revisitKeys[i] = ww.detectRevisit(int32(i), r, meta)
+		defer func() { _ = r.Close() }()
 	}
-	storageRef := warcFileScheme + ":" + fileName + ":" + strconv.FormatInt(offset, 10)
-	collectionFinalName := ww.filePrefix[:len(ww.filePrefix)-1]
+	results := ww.fileWriter.Write(record...)
+	var err error
 
-	reply := &contentwriter.WriteResponseMeta_RecordMeta{
-		RecordNum:           recordNum,
-		Type:                FromGowarcRecordType(record.Type()),
-		WarcId:              record.WarcHeader().Get(gowarc.WarcRecordID),
-		StorageRef:          storageRef,
-		BlockDigest:         record.WarcHeader().Get(gowarc.WarcBlockDigest),
-		PayloadDigest:       record.WarcHeader().Get(gowarc.WarcPayloadDigest),
-		RevisitReferenceId:  record.WarcHeader().Get(gowarc.WarcRefersTo),
-		CollectionFinalName: collectionFinalName,
+	reply := &contentwriter.WriteReply{
+		Meta: &contentwriter.WriteResponseMeta{
+			RecordMeta: map[int32]*contentwriter.WriteResponseMeta_RecordMeta{},
+		},
+	}
+
+	for i, res := range results {
+		recNum := int32(i)
+		rec := record[i]
+		revisitKey := revisitKeys[i]
+
+		if res.Err != nil {
+			log.Err(res.Err).Msg("Aha!!!")
+		}
+		// If writing records faild. Set err to the first error
+		if err == nil && res.Err != nil {
+			err = res.Err
+		}
+
+		if res.Err == nil && revisitKey != "" {
+			t, err := time.Parse(time.RFC3339, rec.WarcHeader().Get(gowarc.WarcDate))
+			if err != nil {
+				log.Err(err).Msg("Could not write CrawledContent to DB")
+			}
+			cr := &contentwriter.CrawledContent{
+				Digest:    revisitKey,
+				WarcId:    rec.WarcHeader().Get(gowarc.WarcRecordID),
+				TargetUri: meta.GetTargetUri(),
+				Date:      timestamppb.New(t),
+			}
+			if err := ww.dbAdapter.WriteCrawledContent(context.TODO(), cr); err != nil {
+				log.Err(err).Msg("Could not write CrawledContent to DB")
+			}
+		}
+		storageRef := warcFileScheme + ":" + res.FileName + ":" + strconv.FormatInt(res.FileOffset, 10)
+		collectionFinalName := ww.filePrefix[:len(ww.filePrefix)-1]
+
+		reply.GetMeta().GetRecordMeta()[recNum] = &contentwriter.WriteResponseMeta_RecordMeta{
+			RecordNum:           recNum,
+			Type:                FromGowarcRecordType(record[i].Type()),
+			WarcId:              rec.WarcHeader().Get(gowarc.WarcRecordID),
+			StorageRef:          storageRef,
+			BlockDigest:         rec.WarcHeader().Get(gowarc.WarcBlockDigest),
+			PayloadDigest:       rec.WarcHeader().Get(gowarc.WarcPayloadDigest),
+			RevisitReferenceId:  rec.WarcHeader().Get(gowarc.WarcRefersTo),
+			CollectionFinalName: collectionFinalName,
+		}
 	}
 	return reply, err
 }
@@ -167,6 +191,7 @@ func (ww *warcWriter) detectRevisit(recordNum int32, record gowarc.WarcRecord, m
 }
 
 func (ww *warcWriter) initFileWriter() {
+	log.Debug().Msgf("Initializing filewriter with dir: '%s' and file prefix: '%s'", ww.settings.WarcDir(), ww.filePrefix)
 	c := ww.collectionConfig.GetCollection()
 	namer := &gowarc.PatternNameGenerator{
 		Directory: ww.settings.WarcDir(),
@@ -179,6 +204,7 @@ func (ww *warcWriter) initFileWriter() {
 		gowarc.WithFileNameGenerator(namer),
 		gowarc.WithWarcInfoFunc(ww.warcInfoGenerator),
 		gowarc.WithMaxConcurrentWriters(ww.settings.WarcWriterPoolSize()),
+		gowarc.WithAddWarcConcurrentToHeader(true),
 	}
 
 	ww.fileWriter = gowarc.NewWarcFileWriter(opts...)
@@ -194,12 +220,11 @@ func (ww *warcWriter) waitForTimer(rotationPolicy config.Collection_RotationPoli
 			ww.lock.Lock()
 			defer ww.lock.Unlock()
 			ww.filePrefix = prefix
-			o := ww.fileWriter
-			ww.fileWriter = nil
-			ww.initFileWriter()
-			if err := o.Shutdown(); err != nil {
+			if err := ww.fileWriter.Shutdown(); err != nil {
 				log.Err(err).Msg("failed shutting down file writer")
 			}
+			ww.fileWriter = nil
+			ww.initFileWriter()
 		} else {
 			if err := ww.fileWriter.Close(); err != nil {
 				log.Err(err).Msg("failed closing file")

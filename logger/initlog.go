@@ -55,4 +55,6 @@ func InitLog(level string, format string, logCaller bool) {
 
 	stdlog.SetFlags(0)
 	stdlog.SetOutput(log.Logger)
+
+	log.Info().Msgf("Setting log level to %s", level)
 }

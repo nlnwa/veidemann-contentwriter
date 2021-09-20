@@ -18,6 +18,7 @@ package server
 
 import (
 	"fmt"
+	"github.com/nlnwa/gowarc"
 	"github.com/nlnwa/veidemann-contentwriter/database"
 	"github.com/nlnwa/veidemann-contentwriter/settings"
 	"google.golang.org/grpc/codes"
@@ -96,22 +97,6 @@ func (s *ContentWriterService) Write(stream contentwriter.ContentWriter_WriteSer
 		request, err := stream.Recv()
 		if err == io.EOF {
 			return s.onCompleted(ctx, stream)
-			//return stream.SendAndClose(&contentwriter.WriteReply{
-			//	Meta: &contentwriter.WriteResponseMeta{
-			//		RecordMeta: map[int32](*contentwriter.WriteResponseMeta_RecordMeta){
-			//			0: {
-			//				RecordNum:           0,
-			//				Type:                0,
-			//				WarcId:              "",
-			//				StorageRef:          "",
-			//				BlockDigest:         "",
-			//				PayloadDigest:       "",
-			//				RevisitReferenceId:  "",
-			//				CollectionFinalName: "",
-			//			},
-			//		},
-			//	},
-			//})
 		}
 		if err != nil {
 			log.Err(err).Msgf("Error caught: %s", err.Error())
@@ -121,39 +106,23 @@ func (s *ContentWriterService) Write(stream contentwriter.ContentWriter_WriteSer
 
 		switch v := request.Value.(type) {
 		case *contentwriter.WriteRequest_Meta:
+			log.Trace().Msgf("Got API request %T for %d records", v, len(v.Meta.RecordMeta))
 			if err := ctx.setWriteRequestMeta(v.Meta); err != nil {
 				ctx.cancelSession(err.Error())
 				return err
 			}
 		case *contentwriter.WriteRequest_ProtocolHeader:
-			recordBuilder, err := ctx.getRecordBuilder(v.ProtocolHeader.RecordNum)
-			if err != nil {
-				ctx.cancelSession(err.Error())
-				return err
-			}
-			if recordBuilder.Size() != 0 {
-				ctx.cancelSession(err.Error())
-				return ctx.handleErr(codes.InvalidArgument, "Header received twice")
-			}
-			if _, err := recordBuilder.Write(v.ProtocolHeader.GetData()); err != nil {
-				ctx.cancelSession(err.Error())
-				return err
-			}
-			if _, err := recordBuilder.Write([]byte("\n\n")); err != nil {
-				ctx.cancelSession(err.Error())
+			log.Trace().Msgf("Got API request %T for record #%d. Size: %d", v, v.ProtocolHeader.RecordNum, len(v.ProtocolHeader.GetData()))
+			if err := ctx.writeProtocolHeader(v.ProtocolHeader); err != nil {
 				return err
 			}
 		case *contentwriter.WriteRequest_Payload:
-			recordBuilder, err := ctx.getRecordBuilder(v.Payload.RecordNum)
-			if err != nil {
-				ctx.cancelSession(err.Error())
-				return err
-			}
-			if _, err := recordBuilder.Write(v.Payload.GetData()); err != nil {
-				ctx.cancelSession(err.Error())
+			log.Trace().Msgf("Got API request %T for record #%d. Size: %d", v, v.Payload.RecordNum, len(v.Payload.GetData()))
+			if err := ctx.writePayoad(v.Payload); err != nil {
 				return err
 			}
 		case *contentwriter.WriteRequest_Cancel:
+			log.Trace().Msgf("Got API request %T", v)
 			ctx.cancelSession(v.Cancel)
 		default:
 			return fmt.Errorf("Invalid request %s", v)
@@ -163,17 +132,12 @@ func (s *ContentWriterService) Write(stream contentwriter.ContentWriter_WriteSer
 
 func (s *ContentWriterService) onCompleted(context *writeSessionContext, stream contentwriter.ContentWriter_WriteServer) error {
 	if context.canceled {
-		return stream.SendAndClose(&contentwriter.WriteReply{})
+		return context.handleErr(codes.Canceled, "Session canceled")
+		//return stream.SendAndClose(&contentwriter.WriteReply{})
 	}
 
 	if context.meta == nil {
 		return context.handleErr(codes.InvalidArgument, "Missing metadata object")
-	}
-
-	reply := &contentwriter.WriteReply{
-		Meta: &contentwriter.WriteResponseMeta{
-			RecordMeta: make(map[int32]*contentwriter.WriteResponseMeta_RecordMeta),
-		},
 	}
 
 	if err := context.validateSession(); err != nil {
@@ -181,18 +145,16 @@ func (s *ContentWriterService) onCompleted(context *writeSessionContext, stream 
 		return err
 	}
 
-	var n int32
-	for n = 0; n < int32(len(context.meta.RecordMeta)); n++ {
-		record := context.records[n]
-		writer := s.warcWriterRegistry.GetWarcWriter(context.collectionConfig, context.meta.RecordMeta[n])
-		writeResponseMeta, err := writer.Write(n, record, context.meta)
-		if err != nil {
-			context.cancelSession("Failed writing record: " + err.Error())
-			return err
-		}
-
-		reply.Meta.RecordMeta[n] = writeResponseMeta
+	records := make([]gowarc.WarcRecord, len(context.records))
+	for i := 0; i < len(records); i++ {
+		records[i] = context.records[int32(i)]
+	}
+	writer := s.warcWriterRegistry.GetWarcWriter(context.collectionConfig, context.meta.RecordMeta[0])
+	writeResponseMeta, err := writer.Write(context.meta, records...)
+	if err != nil {
+		context.cancelSession("Failed writing record: " + err.Error())
+		return err
 	}
 
-	return stream.SendAndClose(reply)
+	return stream.SendAndClose(writeResponseMeta)
 }

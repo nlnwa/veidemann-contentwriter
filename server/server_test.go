@@ -25,6 +25,7 @@ import (
 	"github.com/nlnwa/veidemann-contentwriter/database"
 	"github.com/nlnwa/veidemann-contentwriter/settings"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -52,7 +53,8 @@ func newServerAndClient() serverAndClient {
 	serverAndClient := serverAndClient{}
 
 	dbMockConn := database.NewMockConnection()
-	dbMockConn.GetMock().On(r.Table("config").Get("c1")).Return(map[string]interface{}{
+	dbMockConn.GetMock().
+		On(r.Table("config").Get("c1")).Return(map[string]interface{}{
 		"id": "c1",
 		"meta": map[string]interface{}{
 			"name": "c1",
@@ -60,8 +62,17 @@ func newServerAndClient() serverAndClient {
 		"collection": map[string]interface{}{
 			"collectionDedupPolicy": "HOURLY",
 			"fileRotationPolicy":    "MONTHLY",
+		}}, nil).
+		On(r.Table("config").Get("c2")).Return(map[string]interface{}{
+		"id": "c2",
+		"meta": map[string]interface{}{
+			"name": "c2",
 		},
-	}, nil)
+		"collection": map[string]interface{}{
+			"collectionDedupPolicy": "HOURLY",
+			"fileRotationPolicy":    "MONTHLY",
+			"compress":              true,
+		}}, nil)
 	serverAndClient.dbMock = dbMockConn.GetMock()
 
 	configCache := database.NewConfigCache(dbMockConn, time.Duration(1))
@@ -99,6 +110,33 @@ func (s serverAndClient) close() {
 type writeRequests []*contentwriter.WriteRequest
 
 var writeReq1 writeRequests = writeRequests{
+	&contentwriter.WriteRequest{Value: &contentwriter.WriteRequest_ProtocolHeader{ProtocolHeader: &contentwriter.Data{
+		RecordNum: 0,
+		Data: []byte("GET / HTTP/1.0\r\n" +
+			"Host: example.com\r\n" +
+			"Accept-Language: en-US,en;q=0.8,ru;q=0.6\r\n" +
+			"Referer: http://example.com/foo.html\r\n" +
+			"Connection: close\r\n" +
+			"User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36\r\n",
+		),
+	}}},
+	&contentwriter.WriteRequest{Value: &contentwriter.WriteRequest_ProtocolHeader{ProtocolHeader: &contentwriter.Data{
+		RecordNum: 1,
+		Data: []byte("HTTP/1.1 200 OK\r\n" +
+			"Date: Tue, 19 Sep 2016 17:18:40 GMT\r\n" +
+			"Server: Apache/2.0.54 (Ubuntu)\r\n" +
+			"Last-Modified: Mon, 16 Jun 2013 22:28:51 GMT\r\n" +
+			"ETag: \"3e45-67e-2ed02ec0\"\r\n" +
+			"Accept-Ranges: bytes\r\n" +
+			"Content-Length: 19\r\n" +
+			"Connection: close\r\n" +
+			"Content-Type: text/plain\r\n",
+		),
+	}}},
+	&contentwriter.WriteRequest{Value: &contentwriter.WriteRequest_Payload{Payload: &contentwriter.Data{
+		RecordNum: 1,
+		Data:      []byte("This is the content"),
+	}}},
 	&contentwriter.WriteRequest{Value: &contentwriter.WriteRequest_Meta{Meta: &contentwriter.WriteRequestMeta{
 		ExecutionId: "eid1",
 		TargetUri:   "http://www.example.com/foo.html",
@@ -106,17 +144,17 @@ var writeReq1 writeRequests = writeRequests{
 			0: {
 				RecordNum:         0,
 				Type:              contentwriter.RecordType_REQUEST,
-				Size:              263,
+				Size:              268,
 				RecordContentType: "application/http;msgtype=request",
-				BlockDigest:       "sha1:A3781FF1FC3FB52318F623E22C85D63D74C12932",
+				BlockDigest:       "sha1:AD6944346BF47CEACBE14E387EB031FCBDB59227",
 				PayloadDigest:     "sha1:DA39A3EE5E6B4B0D3255BFEF95601890AFD80709",
 			},
 			1: {
 				RecordNum:         1,
 				Type:              contentwriter.RecordType_RESPONSE,
-				Size:              257,
+				Size:              267,
 				RecordContentType: "application/http;msgtype=response",
-				BlockDigest:       "sha1:B285747AD7CC57AA74BCE2E30B453C8D1CB71BA4",
+				BlockDigest:       "sha1:4126C2DC27F113BEEC37A46276514CD4300DA10D",
 				PayloadDigest:     "sha1:C37FFB221569C553A2476C22C7DAD429F3492977",
 			},
 		},
@@ -124,32 +162,67 @@ var writeReq1 writeRequests = writeRequests{
 		IpAddress:      "127.0.0.1",
 		CollectionRef:  &config.ConfigRef{Kind: config.Kind_collection, Id: "c1"},
 	}}},
+}
+
+var writeReq2 writeRequests = writeRequests{
 	&contentwriter.WriteRequest{Value: &contentwriter.WriteRequest_ProtocolHeader{ProtocolHeader: &contentwriter.Data{
 		RecordNum: 0,
-		Data: []byte("GET / HTTP/1.0\n" +
-			"Host: example.com\n" +
-			"Accept-Language: en-US,en;q=0.8,ru;q=0.6\n" +
-			"Referer: http://example.com/foo.html\n" +
-			"Connection: close\n" +
-			"User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36"),
+		Data: []byte("GET / HTTP/1.0\r\n" +
+			"Host: example.com\r\n" +
+			"Accept-Language: en-US,en;q=0.8,ru;q=0.6\r\n" +
+			"Referer: http://example.com/foo.html\r\n" +
+			"Connection: close\r\n" +
+			"User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36\r\n",
+		),
 	}}},
 	&contentwriter.WriteRequest{Value: &contentwriter.WriteRequest_ProtocolHeader{ProtocolHeader: &contentwriter.Data{
 		RecordNum: 1,
-		Data: []byte(
-			"HTTP/1.1 200 OK\nDate: Tue, 19 Sep 2016 17:18:40 GMT\nServer: Apache/2.0.54 (Ubuntu)\n" +
-				"Last-Modified: Mon, 16 Jun 2013 22:28:51 GMT\nETag: \"3e45-67e-2ed02ec0\"\nAccept-Ranges: bytes\n" +
-				"Content-Length: 19\nConnection: close\nContent-Type: text/plain",
+		Data: []byte("HTTP/1.1 200 OK\r\n" +
+			"Date: Tue, 19 Sep 2016 17:18:40 GMT\r\n" +
+			"Server: Apache/2.0.54 (Ubuntu)\r\n" +
+			"Last-Modified: Mon, 16 Jun 2013 22:28:51 GMT\r\n" +
+			"ETag: \"3e45-67e-2ed02ec0\"\r\n" +
+			"Accept-Ranges: bytes\r\n" +
+			"Content-Length: 19\r\n" +
+			"Connection: close\r\n" +
+			"Content-Type: text/plain\r\n",
 		),
 	}}},
 	&contentwriter.WriteRequest{Value: &contentwriter.WriteRequest_Payload{Payload: &contentwriter.Data{
 		RecordNum: 1,
 		Data:      []byte("This is the content"),
 	}}},
+	&contentwriter.WriteRequest{Value: &contentwriter.WriteRequest_Meta{Meta: &contentwriter.WriteRequestMeta{
+		ExecutionId: "eid1",
+		TargetUri:   "http://www.example.com/foo.html",
+		RecordMeta: map[int32]*contentwriter.WriteRequestMeta_RecordMeta{
+			0: {
+				RecordNum:         0,
+				Type:              contentwriter.RecordType_REQUEST,
+				Size:              268,
+				RecordContentType: "application/http;msgtype=request",
+				BlockDigest:       "sha1:AD6944346BF47CEACBE14E387EB031FCBDB59227",
+				PayloadDigest:     "sha1:DA39A3EE5E6B4B0D3255BFEF95601890AFD80709",
+			},
+			1: {
+				RecordNum:         1,
+				Type:              contentwriter.RecordType_RESPONSE,
+				Size:              267,
+				RecordContentType: "application/http;msgtype=response",
+				BlockDigest:       "sha1:4126C2DC27F113BEEC37A46276514CD4300DA10D",
+				PayloadDigest:     "sha1:C37FFB221569C553A2476C22C7DAD429F3492977",
+			},
+		},
+		FetchTimeStamp: timestamppb.Now(),
+		IpAddress:      "127.0.0.1",
+		CollectionRef:  &config.ConfigRef{Kind: config.Kind_collection, Id: "c2"},
+	}}},
 }
 
 func TestContentWriterService_Write(t *testing.T) {
 	err := os.Mkdir(warcdir, fileutil.PrivateDirMode)
-	assert.NoError(t, err)
+	defer rmDir(warcdir)
+	require.NoError(t, err)
 
 	now = func() time.Time {
 		return time.Date(2000, 10, 10, 2, 59, 59, 0, time.UTC)
@@ -188,7 +261,7 @@ func TestContentWriterService_Write(t *testing.T) {
 	assert.Equal(int32(0), reply.Meta.RecordMeta[0].RecordNum)
 	assert.Equal(contentwriter.RecordType_REQUEST, reply.Meta.RecordMeta[0].Type)
 	assert.Regexp("<urn:uuid:.{8}-.{4}-.{4}-.{4}-.{12}>", reply.Meta.RecordMeta[0].WarcId)
-	assert.Equal("sha1:A3781FF1FC3FB52318F623E22C85D63D74C12932", reply.Meta.RecordMeta[0].BlockDigest)
+	assert.Equal("sha1:AD6944346BF47CEACBE14E387EB031FCBDB59227", reply.Meta.RecordMeta[0].BlockDigest)
 	assert.Equal("sha1:DA39A3EE5E6B4B0D3255BFEF95601890AFD80709", reply.Meta.RecordMeta[0].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[0].CollectionFinalName)
 	assert.Equal("", reply.Meta.RecordMeta[0].RevisitReferenceId)
@@ -197,7 +270,7 @@ func TestContentWriterService_Write(t *testing.T) {
 	assert.Equal(int32(1), reply.Meta.RecordMeta[1].RecordNum)
 	assert.Equal(contentwriter.RecordType_RESPONSE, reply.Meta.RecordMeta[1].Type)
 	assert.Regexp("<urn:uuid:.{8}-.{4}-.{4}-.{4}-.{12}>", reply.Meta.RecordMeta[1].WarcId)
-	assert.Equal("sha1:B285747AD7CC57AA74BCE2E30B453C8D1CB71BA4", reply.Meta.RecordMeta[1].BlockDigest)
+	assert.Equal("sha1:4126C2DC27F113BEEC37A46276514CD4300DA10D", reply.Meta.RecordMeta[1].BlockDigest)
 	assert.Equal("sha1:C37FFB221569C553A2476C22C7DAD429F3492977", reply.Meta.RecordMeta[1].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[1].CollectionFinalName)
 	assert.Equal("", reply.Meta.RecordMeta[1].RevisitReferenceId)
@@ -206,13 +279,74 @@ func TestContentWriterService_Write(t *testing.T) {
 	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+".open$", 1)
 	serverAndClient.close()
 	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+"$", 1)
+}
 
-	rmDir(warcdir)
+func TestContentWriterService_Write_Compressed(t *testing.T) {
+	err := os.Mkdir(warcdir, fileutil.PrivateDirMode)
+	defer rmDir(warcdir)
+	require.NoError(t, err)
+
+	now = func() time.Time {
+		return time.Date(2000, 10, 10, 2, 59, 59, 0, time.UTC)
+	}
+
+	serverAndClient := newServerAndClient()
+	serverAndClient.dbMock.
+		On(r.Table("crawled_content").Get("sha1:C37FFB221569C553A2476C22C7DAD429F3492977:c2_2000101002")).
+		Return(nil, nil).Once()
+
+	s := map[string]interface{}{
+		"date":      r.MockAnything(),
+		"digest":    "sha1:C37FFB221569C553A2476C22C7DAD429F3492977:c2_2000101002",
+		"targetUri": "http://www.example.com/foo.html",
+		"warcId":    r.MockAnything(),
+	}
+
+	serverAndClient.dbMock.
+		On(r.Table("crawled_content").Insert(s)).Return(&r.WriteResponse{Inserted: 1}, nil)
+
+	ctx := context.Background()
+	assert := assert.New(t)
+
+	stream, err := serverAndClient.client.Write(ctx)
+	assert.NoError(err)
+	for i, r := range writeReq2 {
+		err = stream.Send(r)
+		assert.NoErrorf(err, "Error sending request #%d", i)
+	}
+	reply, err := stream.CloseAndRecv()
+	assert.NoError(err)
+	assert.Equal(2, len(reply.Meta.RecordMeta))
+
+	fileNamePattern := `c2_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc.gz`
+
+	assert.Equal(int32(0), reply.Meta.RecordMeta[0].RecordNum)
+	assert.Equal(contentwriter.RecordType_REQUEST, reply.Meta.RecordMeta[0].Type)
+	assert.Regexp("<urn:uuid:.{8}-.{4}-.{4}-.{4}-.{12}>", reply.Meta.RecordMeta[0].WarcId)
+	assert.Equal("sha1:AD6944346BF47CEACBE14E387EB031FCBDB59227", reply.Meta.RecordMeta[0].BlockDigest)
+	assert.Equal("sha1:DA39A3EE5E6B4B0D3255BFEF95601890AFD80709", reply.Meta.RecordMeta[0].PayloadDigest)
+	assert.Equal("c2_2000101002", reply.Meta.RecordMeta[0].CollectionFinalName)
+	assert.Equal("", reply.Meta.RecordMeta[0].RevisitReferenceId)
+	assert.Regexp("warcfile:"+fileNamePattern+`:\d\d\d$`, reply.Meta.RecordMeta[0].StorageRef)
+
+	assert.Equal(int32(1), reply.Meta.RecordMeta[1].RecordNum)
+	assert.Equal(contentwriter.RecordType_RESPONSE, reply.Meta.RecordMeta[1].Type)
+	assert.Regexp("<urn:uuid:.{8}-.{4}-.{4}-.{4}-.{12}>", reply.Meta.RecordMeta[1].WarcId)
+	assert.Equal("sha1:4126C2DC27F113BEEC37A46276514CD4300DA10D", reply.Meta.RecordMeta[1].BlockDigest)
+	assert.Equal("sha1:C37FFB221569C553A2476C22C7DAD429F3492977", reply.Meta.RecordMeta[1].PayloadDigest)
+	assert.Equal("c2_2000101002", reply.Meta.RecordMeta[1].CollectionFinalName)
+	assert.Equal("", reply.Meta.RecordMeta[1].RevisitReferenceId)
+	assert.Regexp("warcfile:"+fileNamePattern+`:\d\d\d$`, reply.Meta.RecordMeta[1].StorageRef)
+
+	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+".open$", 1)
+	serverAndClient.close()
+	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+"$", 1)
 }
 
 func TestContentWriterService_WriteRevisit(t *testing.T) {
 	err := os.Mkdir(warcdir, fileutil.PrivateDirMode)
-	assert.NoError(t, err)
+	defer rmDir(warcdir)
+	require.NoError(t, err)
 
 	now = func() time.Time {
 		return time.Date(2000, 10, 10, 2, 59, 59, 0, time.UTC)
@@ -246,7 +380,7 @@ func TestContentWriterService_WriteRevisit(t *testing.T) {
 	assert.Equal(int32(0), reply.Meta.RecordMeta[0].RecordNum)
 	assert.Equal(contentwriter.RecordType_REQUEST, reply.Meta.RecordMeta[0].Type)
 	assert.Regexp("<urn:uuid:.{8}-.{4}-.{4}-.{4}-.{12}>", reply.Meta.RecordMeta[0].WarcId)
-	assert.Equal("sha1:A3781FF1FC3FB52318F623E22C85D63D74C12932", reply.Meta.RecordMeta[0].BlockDigest)
+	assert.Equal("sha1:AD6944346BF47CEACBE14E387EB031FCBDB59227", reply.Meta.RecordMeta[0].BlockDigest)
 	assert.Equal("sha1:DA39A3EE5E6B4B0D3255BFEF95601890AFD80709", reply.Meta.RecordMeta[0].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[0].CollectionFinalName)
 	assert.Equal("", reply.Meta.RecordMeta[0].RevisitReferenceId)
@@ -255,7 +389,7 @@ func TestContentWriterService_WriteRevisit(t *testing.T) {
 	assert.Equal(int32(1), reply.Meta.RecordMeta[1].RecordNum)
 	assert.Equal(contentwriter.RecordType_REVISIT, reply.Meta.RecordMeta[1].Type)
 	assert.Regexp("<urn:uuid:.{8}-.{4}-.{4}-.{4}-.{12}>", reply.Meta.RecordMeta[1].WarcId)
-	assert.Equal("sha1:BF9D96D3F3F230CE8E2C6A3E5E1D51A81016B55E", reply.Meta.RecordMeta[1].BlockDigest)
+	assert.Equal("sha1:C3BAD90968CC446FF64FED82D030AAB5A0B5884A", reply.Meta.RecordMeta[1].BlockDigest)
 	assert.Equal("sha1:C37FFB221569C553A2476C22C7DAD429F3492977", reply.Meta.RecordMeta[1].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[1].CollectionFinalName)
 	assert.Equal("<urn:uuid:fff232109-0d71-467f-b728-de86be386c6f>", reply.Meta.RecordMeta[1].RevisitReferenceId)
@@ -264,8 +398,6 @@ func TestContentWriterService_WriteRevisit(t *testing.T) {
 	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+".open$", 1)
 	serverAndClient.close()
 	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+"$", 1)
-
-	rmDir(warcdir)
 }
 
 func dirHasFilesMatching(t *testing.T, dir string, pattern string, count int) bool {

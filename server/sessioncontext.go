@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"sync"
-	"time"
 )
 
 type writeSessionContext struct {
@@ -40,6 +39,7 @@ type writeSessionContext struct {
 	collectionConfig *config.ConfigObject
 	records          map[int32]gowarc.WarcRecord
 	recordBuilders   map[int32]gowarc.WarcRecordBuilder
+	payloadStarted   map[int32]bool
 	rbMapSync        sync.Mutex
 	canceled         bool
 }
@@ -50,6 +50,7 @@ func newWriteSessionContext(settings settings.Settings, configCache database.Con
 		configCache:    configCache,
 		records:        make(map[int32]gowarc.WarcRecord),
 		recordBuilders: make(map[int32]gowarc.WarcRecordBuilder),
+		payloadStarted: make(map[int32]bool),
 		log:            log.Logger,
 	}
 }
@@ -86,6 +87,44 @@ func (s *writeSessionContext) setWriteRequestMeta(w *contentwriter.WriteRequestM
 	return nil
 }
 
+func (s *writeSessionContext) writeProtocolHeader(header *contentwriter.Data) error {
+	recordBuilder, err := s.getRecordBuilder(header.RecordNum)
+	if err != nil {
+		s.cancelSession(err.Error())
+		return err
+	}
+	if recordBuilder.Size() != 0 {
+		err := s.handleErr(codes.InvalidArgument, "Header received twice")
+		s.cancelSession(err.Error())
+		return err
+	}
+	if _, err := recordBuilder.Write(header.GetData()); err != nil {
+		s.cancelSession(err.Error())
+		return err
+	}
+	return nil
+}
+
+func (s *writeSessionContext) writePayoad(payload *contentwriter.Data) error {
+	recordBuilder, err := s.getRecordBuilder(payload.RecordNum)
+	if err != nil {
+		s.cancelSession(err.Error())
+		return err
+	}
+	if !s.payloadStarted[payload.RecordNum] {
+		if _, err := recordBuilder.Write([]byte("\r\n")); err != nil {
+			s.cancelSession(err.Error())
+			return err
+		}
+		s.payloadStarted[payload.RecordNum] = true
+	}
+	if _, err := recordBuilder.Write(payload.GetData()); err != nil {
+		s.cancelSession(err.Error())
+		return err
+	}
+	return nil
+}
+
 func (s *writeSessionContext) getRecordBuilder(recordNum int32) (gowarc.WarcRecordBuilder, error) {
 	s.rbMapSync.Lock()
 	defer s.rbMapSync.Unlock()
@@ -94,14 +133,8 @@ func (s *writeSessionContext) getRecordBuilder(recordNum int32) (gowarc.WarcReco
 		return recordBuilder, nil
 	}
 
-	recordMeta, ok := s.meta.RecordMeta[recordNum]
-	if !ok {
-		return nil, fmt.Errorf("missing metadata for record #%d", recordNum)
-	}
-
-	rt := ToGowarcRecordType(recordMeta.Type)
-	rb := gowarc.NewRecordBuilder(rt,
-		gowarc.WithStrictValidation(),
+	rb := gowarc.NewRecordBuilder(0,
+		//gowarc.WithStrictValidation(),
 		gowarc.WithBufferTmpDir(s.settings.WorkDir()),
 		gowarc.WithVersion(s.settings.WarcVersion()))
 	s.recordBuilders[recordNum] = rb
@@ -115,8 +148,11 @@ func (s *writeSessionContext) validateSession() error {
 			return s.handleErr(codes.InvalidArgument, "Missing metadata for record num: %d", k)
 		}
 
+		rt := ToGowarcRecordType(recordMeta.Type)
+		rb.SetRecordType(rt)
+		rb.AddWarcHeader(gowarc.WarcTargetURI, s.meta.TargetUri)
 		rb.AddWarcHeader(gowarc.WarcIPAddress, s.meta.IpAddress)
-		rb.AddWarcHeaderTime(gowarc.WarcDate, time.Now())
+		rb.AddWarcHeaderTime(gowarc.WarcDate, s.meta.FetchTimeStamp.AsTime())
 		rb.AddWarcHeaderInt64(gowarc.ContentLength, recordMeta.Size)
 		rb.AddWarcHeader(gowarc.ContentType, recordMeta.RecordContentType)
 		rb.AddWarcHeader(gowarc.WarcBlockDigest, recordMeta.BlockDigest)
@@ -124,7 +160,7 @@ func (s *writeSessionContext) validateSession() error {
 			rb.AddWarcHeader(gowarc.WarcPayloadDigest, recordMeta.PayloadDigest)
 		}
 		for _, wct := range recordMeta.GetWarcConcurrentTo() {
-			rb.AddWarcHeader(gowarc.WarcConcurrentTo, wct)
+			rb.AddWarcHeader(gowarc.WarcConcurrentTo, "<"+wct+">")
 		}
 
 		wr, _, err := rb.Build()
