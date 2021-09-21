@@ -221,14 +221,14 @@ func (ww *warcWriter) waitForTimer(rotationPolicy config.Collection_RotationPoli
 			ww.lock.Lock()
 			defer ww.lock.Unlock()
 			ww.filePrefix = prefix
-			if err := ww.fileWriter.Shutdown(); err != nil {
-				log.Err(err).Msg("failed shutting down file writer")
+			if err := ww.fileWriter.Close(); err != nil {
+				log.Err(err).Msg("failed closing file writer")
 			}
 			ww.fileWriter = nil
 			ww.initFileWriter()
 		} else {
-			if err := ww.fileWriter.Close(); err != nil {
-				log.Err(err).Msg("failed closing file")
+			if err := ww.fileWriter.Rotate(); err != nil {
+				log.Err(err).Msg("failed rotating file")
 			}
 		}
 
@@ -251,8 +251,8 @@ func (ww *warcWriter) Shutdown() {
 	if ww.timer != nil {
 		close(ww.done)
 	}
-	if err := ww.fileWriter.Shutdown(); err != nil {
-		log.Err(err).Msg("failed shutting down file writer")
+	if err := ww.fileWriter.Close(); err != nil {
+		log.Err(err).Msg("failed closing file writer")
 	}
 }
 
