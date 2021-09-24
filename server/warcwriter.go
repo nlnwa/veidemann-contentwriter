@@ -114,18 +114,18 @@ func (ww *warcWriter) Write(meta *contentwriter.WriteRequestMeta, record ...gowa
 		}
 
 		if res.Err == nil && revisitKey != "" {
-			t, err := time.Parse(time.RFC3339, rec.WarcHeader().Get(gowarc.WarcDate))
-			if err != nil {
+			if t, err := time.Parse(time.RFC3339, rec.WarcHeader().Get(gowarc.WarcDate)); err != nil {
 				log.Err(err).Msg("Could not write CrawledContent to DB")
-			}
-			cr := &contentwriter.CrawledContent{
-				Digest:    revisitKey,
-				WarcId:    rec.WarcHeader().Get(gowarc.WarcRecordID),
-				TargetUri: meta.GetTargetUri(),
-				Date:      timestamppb.New(t),
-			}
-			if err := ww.dbAdapter.WriteCrawledContent(context.TODO(), cr); err != nil {
-				log.Err(err).Msg("Could not write CrawledContent to DB")
+			} else {
+				cr := &contentwriter.CrawledContent{
+					Digest:    revisitKey,
+					WarcId:    rec.WarcHeader().Get(gowarc.WarcRecordID),
+					TargetUri: meta.GetTargetUri(),
+					Date:      timestamppb.New(t),
+				}
+				if err := ww.dbAdapter.WriteCrawledContent(context.TODO(), cr); err != nil {
+					log.Err(err).Msg("Could not write CrawledContent to DB")
+				}
 			}
 		}
 		storageRef := warcFileScheme + ":" + res.FileName + ":" + strconv.FormatInt(res.FileOffset, 10)
@@ -155,6 +155,7 @@ func (ww *warcWriter) detectRevisit(recordNum int32, record gowarc.WarcRecord, m
 		duplicate, err := ww.dbAdapter.HasCrawledContent(context.TODO(), revisitKey)
 		if err != nil {
 			log.Err(err).Msg("Failed checking for revisit, treating as new object")
+			return record, ""
 		}
 
 		if duplicate != nil {
@@ -169,6 +170,7 @@ func (ww *warcWriter) detectRevisit(recordNum int32, record gowarc.WarcRecord, m
 			revisit, err := record.ToRevisitRecord(ref)
 			if err != nil {
 				log.Err(err).Msg("Failed checking for revisit, treating as new object")
+				return record, ""
 			}
 
 			newRecordMeta := meta.GetRecordMeta()[recordNum]
@@ -181,6 +183,7 @@ func (ww *warcWriter) detectRevisit(recordNum int32, record gowarc.WarcRecord, m
 			size, err := strconv.ParseInt(revisit.WarcHeader().Get(gowarc.ContentLength), 10, 64)
 			if err != nil {
 				log.Err(err).Msg("Failed checking for revisit, treating as new object")
+				return record, ""
 			}
 			newRecordMeta.Size = size
 			meta.GetRecordMeta()[recordNum] = newRecordMeta
