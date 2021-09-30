@@ -28,6 +28,7 @@ type Settings interface {
 	WorkDir() string
 	TerminationGracePeriodSeconds() int
 	WarcVersion() *gowarc.WarcVersion
+	FlushRecord() bool
 }
 
 type ViperSettings struct{}
@@ -53,5 +54,17 @@ func (s ViperSettings) TerminationGracePeriodSeconds() int {
 }
 
 func (s ViperSettings) WarcVersion() *gowarc.WarcVersion {
-	return gowarc.V1_1
+	v := viper.GetString("warc-version")
+	switch v {
+	case "1.0":
+		return gowarc.V1_0
+	case "1.1":
+		return gowarc.V1_1
+	default:
+		panic("Unsupported WARC version: " + v)
+	}
+}
+
+func (s ViperSettings) FlushRecord() bool {
+	return viper.GetBool("flush-record")
 }

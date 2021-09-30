@@ -209,6 +209,7 @@ func (ww *warcWriter) initFileWriter() {
 		gowarc.WithWarcInfoFunc(ww.warcInfoGenerator),
 		gowarc.WithMaxConcurrentWriters(ww.settings.WarcWriterPoolSize()),
 		gowarc.WithAddWarcConcurrentToHeader(true),
+		gowarc.WithFlush(ww.settings.FlushRecord()),
 	}
 
 	ww.fileWriter = gowarc.NewWarcFileWriter(opts...)

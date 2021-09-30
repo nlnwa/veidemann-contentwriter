@@ -24,7 +24,9 @@ func main() {
 	pflag.Int("port", 8080, "port the browser controller api listens to.")
 	pflag.String("host-name", "", "")
 	pflag.String("warc-dir", "", "")
+	pflag.String("warc-version", "1.1", "which WARC version to use for generated records. Allowed values: 1.0, 1.1")
 	pflag.Int("warc-writer-pool-size", 1, "")
+	pflag.Bool("flush-record", false, "if true, flush WARC-file to disk after each record.")
 	pflag.String("work-dir", "", "")
 	pflag.Int("termination-grace-period-seconds", 0, "")
 

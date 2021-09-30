@@ -16,7 +16,9 @@
 
 package settings
 
-import "github.com/nlnwa/gowarc"
+import (
+	"github.com/nlnwa/gowarc"
+)
 
 type Mock struct {
 	hostName                      string
@@ -24,6 +26,7 @@ type Mock struct {
 	warcWriterPoolSize            int
 	workDir                       string
 	terminationGracePeriodSeconds int
+	flushRecord                   bool
 }
 
 func NewMock(warcDir string, warcWriterPoolSize int) *Mock {
@@ -52,4 +55,8 @@ func (m Mock) TerminationGracePeriodSeconds() int {
 
 func (m Mock) WarcVersion() *gowarc.WarcVersion {
 	return gowarc.V1_1
+}
+
+func (m Mock) FlushRecord() bool {
+	return m.flushRecord
 }
