@@ -28,6 +28,7 @@ type Settings interface {
 	WorkDir() string
 	TerminationGracePeriodSeconds() int
 	WarcVersion() *gowarc.WarcVersion
+	FlushRecord() bool
 }
 
 type ViperSettings struct{}
@@ -54,4 +55,8 @@ func (s ViperSettings) TerminationGracePeriodSeconds() int {
 
 func (s ViperSettings) WarcVersion() *gowarc.WarcVersion {
 	return gowarc.V1_1
+}
+
+func (s ViperSettings) FlushRecord() bool {
+	return viper.GetBool("flush-record")
 }

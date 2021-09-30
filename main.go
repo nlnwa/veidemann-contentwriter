@@ -25,6 +25,7 @@ func main() {
 	pflag.String("host-name", "", "")
 	pflag.String("warc-dir", "", "")
 	pflag.Int("warc-writer-pool-size", 1, "")
+	pflag.Bool("flush-record", false, "if true, flush WARC-file to disk after each record.")
 	pflag.String("work-dir", "", "")
 	pflag.Int("termination-grace-period-seconds", 0, "")
 
