@@ -34,6 +34,7 @@ import (
 var now = time.Now
 
 const warcFileScheme = "warcfile"
+const ProfileIdenticalPayloadDigest = "http://netpreserve.org/warc/1.0/revisit/identical-payload-digest"
 
 type warcWriter struct {
 	settings         settings.Settings
@@ -45,6 +46,7 @@ type warcWriter struct {
 	timer            *time.Timer
 	done             chan interface{}
 	lock             sync.Mutex
+	revisitProfile   string
 }
 
 func newWarcWriter(s settings.Settings, db database.DbAdapter, c *config.ConfigObject, recordMeta *contentwriter.WriteRequestMeta_RecordMeta) *warcWriter {
@@ -55,6 +57,12 @@ func newWarcWriter(s settings.Settings, db database.DbAdapter, c *config.ConfigO
 		collectionConfig: c,
 		subCollection:    recordMeta.GetSubCollection(),
 		filePrefix:       createFilePrefix(c.GetMeta().GetName(), recordMeta.GetSubCollection(), now(), c.GetCollection().GetCollectionDedupPolicy()),
+	}
+	switch s.WarcVersion() {
+	case gowarc.V1_1:
+		ww.revisitProfile = gowarc.ProfileIdenticalPayloadDigest
+	case gowarc.V1_0:
+		ww.revisitProfile = ProfileIdenticalPayloadDigest
 	}
 	ww.initFileWriter()
 
@@ -162,7 +170,7 @@ func (ww *warcWriter) detectRevisit(recordNum int32, record gowarc.WarcRecord, m
 			log.Debug().Msgf("Detected %s as a revisit of %s",
 				record.WarcHeader().Get(gowarc.WarcRecordID), duplicate.GetWarcId())
 			ref := &gowarc.RevisitRef{
-				Profile:        gowarc.ProfileIdenticalPayloadDigest,
+				Profile:        ww.revisitProfile,
 				TargetRecordId: duplicate.GetWarcId(),
 				TargetUri:      duplicate.GetTargetUri(),
 				TargetDate:     duplicate.GetDate().AsTime().In(time.UTC).Format(time.RFC3339),
