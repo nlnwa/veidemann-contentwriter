@@ -50,7 +50,6 @@ func main() {
 	pflag.Bool("log-method", false, "log method names")
 
 	pflag.Parse()
-	_ = viper.BindPFlags(pflag.CommandLine)
 
 	replacer := strings.NewReplacer("-", "_")
 	viper.SetEnvKeyReplacer(replacer)
@@ -95,6 +94,7 @@ func main() {
 	go func() { errc <- ms.Start() }()
 	defer ms.Close()
 
+	done := make(chan struct{})
 	go func() {
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
@@ -107,10 +107,13 @@ func main() {
 			log.Debug().Msgf("Received signal: %s", sig)
 			contentwriterService.Shutdown()
 		}
+		done <- struct{}{}
 	}()
 
 	err = contentwriterService.Start()
 	if err != nil {
 		log.Err(err).Msg("Could not start Content writer service")
 	}
+	// wait for shutdown to finish
+	<-done
 }
