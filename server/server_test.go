@@ -19,27 +19,23 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/coreos/etcd/pkg/fileutil"
 	"github.com/nlnwa/veidemann-api/go/config/v1"
 	"github.com/nlnwa/veidemann-api/go/contentwriter/v1"
 	"github.com/nlnwa/veidemann-contentwriter/database"
 	"github.com/nlnwa/veidemann-contentwriter/settings"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	r "gopkg.in/rethinkdb/rethinkdb-go.v6"
 	"io/ioutil"
 	"net"
-	"os"
 	"regexp"
 	"testing"
 	"time"
 )
 
 const bufSize = 1024 * 1024
-const warcdir = "testdata"
 
 type serverAndClient struct {
 	lis        *bufconn.Listener
@@ -49,7 +45,7 @@ type serverAndClient struct {
 	client     contentwriter.ContentWriterClient
 }
 
-func newServerAndClient() serverAndClient {
+func newServerAndClient(settings settings.Settings) serverAndClient {
 	serverAndClient := serverAndClient{}
 
 	dbMockConn := database.NewMockConnection()
@@ -77,7 +73,7 @@ func newServerAndClient() serverAndClient {
 
 	configCache := database.NewConfigCache(dbMockConn, time.Duration(1))
 	serverAndClient.lis = bufconn.Listen(bufSize)
-	server := New("", 0, settings.NewMock(warcdir, 1), configCache)
+	server := New("", 0, settings, configCache)
 	server.grpcServer = grpc.NewServer()
 	contentwriter.RegisterContentWriterServer(server.grpcServer, server.service)
 	go func() {
@@ -220,15 +216,13 @@ var writeReq2 writeRequests = writeRequests{
 }
 
 func TestContentWriterService_Write(t *testing.T) {
-	err := os.Mkdir(warcdir, fileutil.PrivateDirMode)
-	defer rmDir(warcdir)
-	require.NoError(t, err)
+	testSettings := settings.NewMock(t.TempDir(), 1)
 
 	now = func() time.Time {
 		return time.Date(2000, 10, 10, 2, 59, 59, 0, time.UTC)
 	}
 
-	serverAndClient := newServerAndClient()
+	serverAndClient := newServerAndClient(testSettings)
 	serverAndClient.dbMock.
 		On(r.Table("crawled_content").Get("sha1:C37FFB221569C553A2476C22C7DAD429F3492977:c1_2000101002")).
 		Return(nil, nil).Once()
@@ -276,21 +270,19 @@ func TestContentWriterService_Write(t *testing.T) {
 	assert.Equal("", reply.Meta.RecordMeta[1].RevisitReferenceId)
 	assert.Regexp("warcfile:"+fileNamePattern+`:\d\d\d\d$`, reply.Meta.RecordMeta[1].StorageRef)
 
-	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+".open$", 1)
+	dirHasFilesMatching(t, testSettings.WarcDir(), "^"+fileNamePattern+".open$", 1)
 	serverAndClient.close()
-	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+"$", 1)
+	dirHasFilesMatching(t, testSettings.WarcDir(), "^"+fileNamePattern+"$", 1)
 }
 
 func TestContentWriterService_Write_Compressed(t *testing.T) {
-	err := os.Mkdir(warcdir, fileutil.PrivateDirMode)
-	defer rmDir(warcdir)
-	require.NoError(t, err)
+	testSettings := settings.NewMock(t.TempDir(), 1)
 
 	now = func() time.Time {
 		return time.Date(2000, 10, 10, 2, 59, 59, 0, time.UTC)
 	}
 
-	serverAndClient := newServerAndClient()
+	serverAndClient := newServerAndClient(testSettings)
 	serverAndClient.dbMock.
 		On(r.Table("crawled_content").Get("sha1:C37FFB221569C553A2476C22C7DAD429F3492977:c2_2000101002")).
 		Return(nil, nil).Once()
@@ -338,21 +330,19 @@ func TestContentWriterService_Write_Compressed(t *testing.T) {
 	assert.Equal("", reply.Meta.RecordMeta[1].RevisitReferenceId)
 	assert.Regexp("warcfile:"+fileNamePattern+`:\d\d\d$`, reply.Meta.RecordMeta[1].StorageRef)
 
-	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+".open$", 1)
+	dirHasFilesMatching(t, testSettings.WarcDir(), "^"+fileNamePattern+".open$", 1)
 	serverAndClient.close()
-	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+"$", 1)
+	dirHasFilesMatching(t, testSettings.WarcDir(), "^"+fileNamePattern+"$", 1)
 }
 
 func TestContentWriterService_WriteRevisit(t *testing.T) {
-	err := os.Mkdir(warcdir, fileutil.PrivateDirMode)
-	defer rmDir(warcdir)
-	require.NoError(t, err)
+	testSettings := settings.NewMock(t.TempDir(), 1)
 
 	now = func() time.Time {
 		return time.Date(2000, 10, 10, 2, 59, 59, 0, time.UTC)
 	}
 
-	serverAndClient := newServerAndClient()
+	serverAndClient := newServerAndClient(testSettings)
 	serverAndClient.dbMock.
 		On(r.Table("crawled_content").Get("sha1:C37FFB221569C553A2476C22C7DAD429F3492977:c1_2000101002")).
 		Return(map[string]interface{}{
@@ -395,9 +385,9 @@ func TestContentWriterService_WriteRevisit(t *testing.T) {
 	assert.Equal("<urn:uuid:fff232109-0d71-467f-b728-de86be386c6f>", reply.Meta.RecordMeta[1].RevisitReferenceId)
 	assert.Regexp(`warcfile:`+fileNamePattern+`:\d\d\d\d`, reply.Meta.RecordMeta[1].StorageRef)
 
-	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+".open$", 1)
+	dirHasFilesMatching(t, testSettings.WarcDir(), "^"+fileNamePattern+".open$", 1)
 	serverAndClient.close()
-	dirHasFilesMatching(t, warcdir, "^"+fileNamePattern+"$", 1)
+	dirHasFilesMatching(t, testSettings.WarcDir(), "^"+fileNamePattern+"$", 1)
 }
 
 func dirHasFilesMatching(t *testing.T, dir string, pattern string, count int) bool {
@@ -421,23 +411,4 @@ func dirHasFilesMatching(t *testing.T, dir string, pattern string, count int) bo
 		return assert.Fail(t, "Wrong number of files in '"+dir+"'", "Expected %d files to match %s, but found %d\nFiles in dir:%s", count, pattern, found, f)
 	}
 	return false
-}
-
-func rmDir(dir string) {
-	files, err := ioutil.ReadDir(dir)
-	if err != nil {
-		return
-	}
-
-	for _, file := range files {
-		fileName := warcdir + "/" + file.Name()
-		err = os.Remove(fileName)
-		if err != nil {
-			panic(err)
-		}
-	}
-	err = os.Remove(dir)
-	if err != nil {
-		panic(err)
-	}
 }
