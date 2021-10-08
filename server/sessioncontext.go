@@ -37,6 +37,7 @@ type writeSessionContext struct {
 	configCache      database.ConfigCache
 	meta             *contentwriter.WriteRequestMeta
 	collectionConfig *config.ConfigObject
+	recordOpts       []gowarc.WarcRecordOption
 	records          map[int32]gowarc.WarcRecord
 	recordBuilders   map[int32]gowarc.WarcRecordBuilder
 	payloadStarted   map[int32]bool
@@ -44,10 +45,10 @@ type writeSessionContext struct {
 	canceled         bool
 }
 
-func newWriteSessionContext(settings settings.Settings, configCache database.ConfigCache) *writeSessionContext {
+func newWriteSessionContext(configCache database.ConfigCache, recordOpts []gowarc.WarcRecordOption) *writeSessionContext {
 	return &writeSessionContext{
-		settings:       settings,
 		configCache:    configCache,
+		recordOpts:     recordOpts,
 		records:        make(map[int32]gowarc.WarcRecord),
 		recordBuilders: make(map[int32]gowarc.WarcRecordBuilder),
 		payloadStarted: make(map[int32]bool),
@@ -88,11 +89,7 @@ func (s *writeSessionContext) setWriteRequestMeta(w *contentwriter.WriteRequestM
 }
 
 func (s *writeSessionContext) writeProtocolHeader(header *contentwriter.Data) error {
-	recordBuilder, err := s.getRecordBuilder(header.RecordNum)
-	if err != nil {
-		s.cancelSession(err.Error())
-		return err
-	}
+	recordBuilder := s.getRecordBuilder(header.RecordNum)
 	if recordBuilder.Size() != 0 {
 		err := s.handleErr(codes.InvalidArgument, "Header received twice")
 		s.cancelSession(err.Error())
@@ -106,11 +103,7 @@ func (s *writeSessionContext) writeProtocolHeader(header *contentwriter.Data) er
 }
 
 func (s *writeSessionContext) writePayoad(payload *contentwriter.Data) error {
-	recordBuilder, err := s.getRecordBuilder(payload.RecordNum)
-	if err != nil {
-		s.cancelSession(err.Error())
-		return err
-	}
+	recordBuilder := s.getRecordBuilder(payload.RecordNum)
 	if !s.payloadStarted[payload.RecordNum] {
 		if _, err := recordBuilder.Write([]byte("\r\n")); err != nil {
 			s.cancelSession(err.Error())
@@ -125,20 +118,18 @@ func (s *writeSessionContext) writePayoad(payload *contentwriter.Data) error {
 	return nil
 }
 
-func (s *writeSessionContext) getRecordBuilder(recordNum int32) (gowarc.WarcRecordBuilder, error) {
+func (s *writeSessionContext) getRecordBuilder(recordNum int32) gowarc.WarcRecordBuilder {
 	s.rbMapSync.Lock()
 	defer s.rbMapSync.Unlock()
 
 	if recordBuilder, ok := s.recordBuilders[recordNum]; ok {
-		return recordBuilder, nil
+		return recordBuilder
 	}
 
-	rb := gowarc.NewRecordBuilder(0,
-		//gowarc.WithStrictValidation(),
-		gowarc.WithBufferTmpDir(s.settings.WorkDir()),
-		gowarc.WithVersion(s.settings.WarcVersion()))
+	rb := gowarc.NewRecordBuilder(0, s.recordOpts...)
+
 	s.recordBuilders[recordNum] = rb
-	return rb, nil
+	return rb
 }
 
 func (s *writeSessionContext) validateSession() error {

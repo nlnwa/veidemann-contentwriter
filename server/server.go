@@ -43,15 +43,22 @@ type GrpcServer struct {
 }
 
 func New(host string, port int, settings settings.Settings, configCache database.ConfigCache) *GrpcServer {
+	recordOpts := []gowarc.WarcRecordOption{
+		gowarc.WithBufferTmpDir(settings.WorkDir()),
+		gowarc.WithVersion(settings.WarcVersion()),
+	}
+	if settings.UseStrictValidation() {
+		recordOpts = append(recordOpts, gowarc.WithStrictValidation())
+	}
 	s := &GrpcServer{
 		listenHost:  host,
 		listenPort:  port,
 		settings:    settings,
 		configCache: configCache,
 		service: &ContentWriterService{
-			settings:           settings,
 			warcWriterRegistry: newWarcWriterRegistry(settings, configCache),
 			configCache:        configCache,
+			recordOptions:      recordOpts,
 		},
 	}
 	return s
@@ -83,15 +90,15 @@ func (s *GrpcServer) Shutdown() {
 
 type ContentWriterService struct {
 	contentwriter.UnimplementedContentWriterServer
-	settings           settings.Settings
 	configCache        database.ConfigCache
 	warcWriterRegistry *warcWriterRegistry
+	recordOptions      []gowarc.WarcRecordOption
 }
 
 func (s *ContentWriterService) Write(stream contentwriter.ContentWriter_WriteServer) error {
 	telemetry.ScopechecksTotal.Inc()
 	//telemetry.ScopecheckResponseTotal.With(prometheus.Labels{"code": strconv.Itoa(int(result.ExcludeReason))}).Inc()
-	ctx := newWriteSessionContext(s.settings, s.configCache)
+	ctx := newWriteSessionContext(s.configCache, s.recordOptions)
 
 	for {
 		request, err := stream.Recv()

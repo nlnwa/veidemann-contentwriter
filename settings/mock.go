@@ -27,6 +27,7 @@ type Mock struct {
 	workDir                       string
 	terminationGracePeriodSeconds int
 	flushRecord                   bool
+	useStrictValidation           bool
 }
 
 func NewMock(warcDir string, warcWriterPoolSize int) *Mock {
@@ -59,4 +60,8 @@ func (m Mock) WarcVersion() *gowarc.WarcVersion {
 
 func (m Mock) FlushRecord() bool {
 	return m.flushRecord
+}
+
+func (m Mock) UseStrictValidation() bool {
+	return m.useStrictValidation
 }

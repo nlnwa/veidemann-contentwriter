@@ -29,6 +29,7 @@ func main() {
 	pflag.Bool("flush-record", false, "if true, flush WARC-file to disk after each record.")
 	pflag.String("work-dir", "", "")
 	pflag.Int("termination-grace-period-seconds", 0, "")
+	pflag.Bool("strict-validation", false, "if true, use strict record validation")
 
 	pflag.String("db-host", "rethinkdb-proxy", "DB host")
 	pflag.Int("db-port", 28015, "DB port")
