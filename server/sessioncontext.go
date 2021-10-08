@@ -18,22 +18,20 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/nlnwa/gowarc"
 	"github.com/nlnwa/veidemann-api/go/config/v1"
 	"github.com/nlnwa/veidemann-api/go/contentwriter/v1"
 	"github.com/nlnwa/veidemann-contentwriter/database"
-	"github.com/nlnwa/veidemann-contentwriter/settings"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"sync"
 )
 
 type writeSessionContext struct {
 	log              zerolog.Logger
-	settings         settings.Settings
 	configCache      database.ConfigCache
 	meta             *contentwriter.WriteRequestMeta
 	collectionConfig *config.ConfigObject
@@ -42,7 +40,6 @@ type writeSessionContext struct {
 	recordBuilders   map[int32]gowarc.WarcRecordBuilder
 	payloadStarted   map[int32]bool
 	rbMapSync        sync.Mutex
-	canceled         bool
 }
 
 func newWriteSessionContext(configCache database.ConfigCache, recordOpts []gowarc.WarcRecordOption) *writeSessionContext {
@@ -56,64 +53,31 @@ func newWriteSessionContext(configCache database.ConfigCache, recordOpts []gowar
 	}
 }
 
-func (s *writeSessionContext) handleErr(code codes.Code, msg string, args ...interface{}) error {
-	m := fmt.Sprintf(msg, args...)
-	s.log.Error().Msg(m)
-	return status.Error(code, m)
-}
-
-func (s *writeSessionContext) setWriteRequestMeta(w *contentwriter.WriteRequestMeta) error {
-	if s.meta == nil {
-		s.log = log.With().Str("eid", w.ExecutionId).Str("uri", w.TargetUri).Logger()
-	}
+func (s *writeSessionContext) setWriteRequestMeta(w *contentwriter.WriteRequestMeta) {
 	s.meta = w
-
-	if w.CollectionRef == nil {
-		return s.handleErr(codes.InvalidArgument, "No collection id in request")
-	}
-	if w.IpAddress == "" {
-		return s.handleErr(codes.InvalidArgument, "Missing IP-address")
-	}
-
-	collectionConfig, err := s.configCache.GetConfigObject(context.TODO(), w.GetCollectionRef())
-	if err != nil {
-		msg := "Error getting collection config " + w.GetCollectionRef().GetId()
-		s.log.Error().Msg(msg)
-		return status.Error(codes.Unknown, msg)
-	}
-	s.collectionConfig = collectionConfig
-	if collectionConfig == nil || collectionConfig.Meta == nil || collectionConfig.Spec == nil {
-		return s.handleErr(codes.Unknown, "Collection with id '%s' is missing or insufficient: %s", w.CollectionRef.Id, collectionConfig.String())
-	}
-	return nil
 }
 
 func (s *writeSessionContext) writeProtocolHeader(header *contentwriter.Data) error {
 	recordBuilder := s.getRecordBuilder(header.RecordNum)
 	if recordBuilder.Size() != 0 {
-		err := s.handleErr(codes.InvalidArgument, "Header received twice")
-		s.cancelSession(err.Error())
-		return err
+		return errors.New("protocol header received twice")
 	}
 	if _, err := recordBuilder.Write(header.GetData()); err != nil {
-		s.cancelSession(err.Error())
-		return err
+		return fmt.Errorf("failed to write protocol header to the record builder: %w", err)
 	}
 	return nil
 }
 
-func (s *writeSessionContext) writePayoad(payload *contentwriter.Data) error {
+func (s *writeSessionContext) writePayload(payload *contentwriter.Data) error {
 	recordBuilder := s.getRecordBuilder(payload.RecordNum)
 	if !s.payloadStarted[payload.RecordNum] {
 		if _, err := recordBuilder.Write([]byte("\r\n")); err != nil {
-			s.cancelSession(err.Error())
-			return err
+			return fmt.Errorf("failed to write pre-payload whitespace to the record builder: %w", err)
 		}
 		s.payloadStarted[payload.RecordNum] = true
 	}
 	if _, err := recordBuilder.Write(payload.GetData()); err != nil {
-		s.cancelSession(err.Error())
-		return err
+		return fmt.Errorf("failed to write payload for record number %d to the record builder: %w", payload.RecordNum, err)
 	}
 	return nil
 }
@@ -133,10 +97,28 @@ func (s *writeSessionContext) getRecordBuilder(recordNum int32) gowarc.WarcRecor
 }
 
 func (s *writeSessionContext) validateSession() error {
+	if s.meta == nil {
+		return errors.New("missing metadata object")
+	}
+	if s.meta.CollectionRef == nil {
+		return errors.New("missing collection ref")
+	}
+	if s.meta.IpAddress == "" {
+		return errors.New("missing IP-address")
+	}
+	collectionConfig, err := s.configCache.GetConfigObject(context.TODO(), s.meta.CollectionRef)
+	if err != nil {
+		return fmt.Errorf("failed to get collection config: %s", s.meta.GetCollectionRef().GetId())
+	}
+	if collectionConfig == nil || collectionConfig.Meta == nil || collectionConfig.Spec == nil {
+		return fmt.Errorf("collection with id '%s' is missing or insufficient: %s", s.meta.GetCollectionRef().Id, collectionConfig)
+	}
+	s.collectionConfig = collectionConfig
+
 	for k, rb := range s.recordBuilders {
 		recordMeta, ok := s.meta.RecordMeta[k]
 		if !ok {
-			return s.handleErr(codes.InvalidArgument, "Missing metadata for record num: %d", k)
+			return fmt.Errorf("missing metadata for record num: %d", k)
 		}
 
 		rt := ToGowarcRecordType(recordMeta.Type)
@@ -156,16 +138,14 @@ func (s *writeSessionContext) validateSession() error {
 
 		wr, _, err := rb.Build()
 		if err != nil {
-			return s.handleErr(codes.InvalidArgument, "Error: %s", err)
+			return fmt.Errorf("failed to build record number %d: %w", k, err)
 		}
 		s.records[k] = wr
 	}
 	return nil
 }
 
-func (s *writeSessionContext) cancelSession(cancelReason string) {
-	s.canceled = true
-	s.log.Debug().Msgf("Request cancelled before WARC record written. Reason %s", cancelReason)
+func (s *writeSessionContext) cancelSession() {
 	for _, rb := range s.recordBuilders {
 		_ = rb.Close()
 	}
