@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.0 // indirect
+	github.com/google/uuid v1.2.0
 	github.com/nlnwa/gowarc v1.0.0-alpha.14
 	github.com/nlnwa/veidemann-api/go v0.0.0-20210414094839-b36ce92632fe
 	github.com/opentracing-contrib/go-grpc v0.0.0-20210225150812-73cb765af46e
