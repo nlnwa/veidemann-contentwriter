@@ -106,6 +106,9 @@ func (s *writeSessionContext) validateSession() error {
 	if s.meta.IpAddress == "" {
 		return errors.New("missing IP-address")
 	}
+	if len(s.meta.TargetUri) == 0 {
+		return errors.New("missing target URI")
+	}
 	collectionConfig, err := s.configCache.GetConfigObject(context.TODO(), s.meta.CollectionRef)
 	if err != nil {
 		return fmt.Errorf("failed to get collection config: %s", s.meta.GetCollectionRef().GetId())
