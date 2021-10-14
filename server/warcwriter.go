@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"github.com/google/uuid"
 	"github.com/nlnwa/gowarc"
 	"github.com/nlnwa/veidemann-api/go/config/v1"
 	"github.com/nlnwa/veidemann-api/go/contentwriter/v1"
@@ -26,6 +27,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -100,7 +102,6 @@ func (ww *warcWriter) Write(meta *contentwriter.WriteRequestMeta, record ...gowa
 		defer func() { _ = r.Close() }()
 	}
 	results := ww.fileWriter.Write(record...)
-	var err error
 
 	reply := &contentwriter.WriteReply{
 		Meta: &contentwriter.WriteResponseMeta{
@@ -108,26 +109,36 @@ func (ww *warcWriter) Write(meta *contentwriter.WriteRequestMeta, record ...gowa
 		},
 	}
 
+	var err error
 	for i, res := range results {
 		recNum := int32(i)
 		rec := record[i]
 		revisitKey := revisitKeys[i]
 
 		if res.Err != nil {
-			log.Err(res.Err).Msg("Aha!!!")
+			log.Err(res.Err).Msgf("Error writing record: %s", rec)
 		}
-		// If writing records faild. Set err to the first error
+		// If writing records failed. Set err to the first error
 		if err == nil && res.Err != nil {
 			err = res.Err
 		}
 
-		if res.Err == nil && revisitKey != "" {
+		// Get WarcRecordId from header (<urn:uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx>)
+		warcRecordId := rec.WarcHeader().Get(gowarc.WarcRecordID)
+		// Trim '<' and '>'
+		warcRecordId = strings.TrimSuffix(strings.TrimPrefix(warcRecordId, "<"), ">")
+		warcId, parseErr := uuid.Parse(warcRecordId)
+		if parseErr != nil {
+			log.Err(parseErr).Msgf("failed to parse %s in %s:%d", gowarc.WarcRecordID, res.FileName, res.FileOffset)
+		}
+
+		if res.Err == nil && parseErr == nil && revisitKey != "" {
 			if t, err := time.Parse(time.RFC3339, rec.WarcHeader().Get(gowarc.WarcDate)); err != nil {
 				log.Err(err).Msg("Could not write CrawledContent to DB")
 			} else {
 				cr := &contentwriter.CrawledContent{
 					Digest:    revisitKey,
-					WarcId:    rec.WarcHeader().Get(gowarc.WarcRecordID),
+					WarcId:    warcId.String(),
 					TargetUri: meta.GetTargetUri(),
 					Date:      timestamppb.New(t),
 				}
@@ -138,11 +149,10 @@ func (ww *warcWriter) Write(meta *contentwriter.WriteRequestMeta, record ...gowa
 		}
 		storageRef := warcFileScheme + ":" + res.FileName + ":" + strconv.FormatInt(res.FileOffset, 10)
 		collectionFinalName := ww.filePrefix[:len(ww.filePrefix)-1]
-
 		reply.GetMeta().GetRecordMeta()[recNum] = &contentwriter.WriteResponseMeta_RecordMeta{
 			RecordNum:           recNum,
 			Type:                FromGowarcRecordType(record[i].Type()),
-			WarcId:              rec.WarcHeader().Get(gowarc.WarcRecordID),
+			WarcId:              warcId.String(),
 			StorageRef:          storageRef,
 			BlockDigest:         rec.WarcHeader().Get(gowarc.WarcBlockDigest),
 			PayloadDigest:       rec.WarcHeader().Get(gowarc.WarcPayloadDigest),

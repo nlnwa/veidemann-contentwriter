@@ -29,9 +29,11 @@ type Settings interface {
 	TerminationGracePeriodSeconds() int
 	WarcVersion() *gowarc.WarcVersion
 	FlushRecord() bool
+	UseStrictValidation() bool
 }
 
-type ViperSettings struct{}
+type ViperSettings struct {
+}
 
 func (s ViperSettings) HostName() string {
 	return viper.GetString("host-name")
@@ -67,4 +69,8 @@ func (s ViperSettings) WarcVersion() *gowarc.WarcVersion {
 
 func (s ViperSettings) FlushRecord() bool {
 	return viper.GetBool("flush-record")
+}
+
+func (s ViperSettings) UseStrictValidation() bool {
+	return viper.GetBool("strict-validation")
 }
