@@ -36,7 +36,6 @@ import (
 var now = time.Now
 
 const warcFileScheme = "warcfile"
-const ProfileIdenticalPayloadDigest = "http://netpreserve.org/warc/1.0/revisit/identical-payload-digest"
 
 type warcWriter struct {
 	settings         settings.Settings
@@ -62,9 +61,9 @@ func newWarcWriter(s settings.Settings, db database.DbAdapter, c *config.ConfigO
 	}
 	switch s.WarcVersion() {
 	case gowarc.V1_1:
-		ww.revisitProfile = gowarc.ProfileIdenticalPayloadDigest
+		ww.revisitProfile = gowarc.ProfileIdenticalPayloadDigestV1_1
 	case gowarc.V1_0:
-		ww.revisitProfile = ProfileIdenticalPayloadDigest
+		ww.revisitProfile = gowarc.ProfileIdenticalPayloadDigestV1_0
 	}
 	ww.initFileWriter()
 
