@@ -136,7 +136,7 @@ func (s *writeSessionContext) validateSession() error {
 			rb.AddWarcHeader(gowarc.WarcPayloadDigest, recordMeta.PayloadDigest)
 		}
 		for _, wct := range recordMeta.GetWarcConcurrentTo() {
-			rb.AddWarcHeader(gowarc.WarcConcurrentTo, "<"+wct+">")
+			rb.AddWarcHeader(gowarc.WarcConcurrentTo, "<urn:uuid:"+wct+">")
 		}
 
 		wr, val, err := rb.Build()
