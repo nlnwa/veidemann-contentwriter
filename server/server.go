@@ -140,6 +140,7 @@ func (s *ContentWriterService) Write(stream contentwriter.ContentWriter_WriteSer
 	}
 
 	if err := ctx.validateSession(); err != nil {
+		log.Warn().Err(err).Msg("Validate session")
 		return status.Errorf(codes.Unknown, "validation failed: %v", err)
 	}
 
