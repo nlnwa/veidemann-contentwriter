@@ -1,0 +1,11 @@
+apiVersion: skaffold/v2beta21
+kind: Config
+build:
+  artifacts:
+    - image: ghcr.io/nlnwa/veidemann-contentwriter
+deploy:
+  kubeContext: minikube
+  kustomize:
+    paths:
+      - github.com/nlnwa/veidemann/dev/veidemann/veidemann-contentwriter
+
