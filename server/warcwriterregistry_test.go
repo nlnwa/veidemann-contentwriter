@@ -114,9 +114,9 @@ func Test_getFilename(t *testing.T) {
 	}
 	d1, f1 := ng.NewWarcfileName()
 	d2, f2 := ng.NewWarcfileName()
-	assert.Regexp(t, regexp.MustCompile(`foo-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f1)
+	assert.Regexp(t, regexp.MustCompile(`foo-\d{14}-0001-(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|.+)\.warc`), f1)
 	assert.Equal(t, "", d1)
-	assert.Regexp(t, regexp.MustCompile(`foo-\d{14}-0002-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f2)
+	assert.Regexp(t, regexp.MustCompile(`foo-\d{14}-0002-(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|.+)\.warc`), f2)
 	assert.Equal(t, "", d2)
 
 	ng = &gowarc.PatternNameGenerator{
@@ -126,9 +126,9 @@ func Test_getFilename(t *testing.T) {
 	}
 	d1, f1 = ng.NewWarcfileName()
 	d2, f2 = ng.NewWarcfileName()
-	assert.Regexp(t, regexp.MustCompile(`foo_\d{4}-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f1)
+	assert.Regexp(t, regexp.MustCompile(`foo_\d{4}-\d{14}-0001-(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|.+)\.warc`), f1)
 	assert.Equal(t, "", d1)
-	assert.Regexp(t, regexp.MustCompile(`foo_\d{4}-\d{14}-0002-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f2)
+	assert.Regexp(t, regexp.MustCompile(`foo_\d{4}-\d{14}-0002-(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|.+)\.warc`), f2)
 	assert.Equal(t, "", d2)
 
 	ng = &gowarc.PatternNameGenerator{
@@ -138,9 +138,9 @@ func Test_getFilename(t *testing.T) {
 	}
 	d1, f1 = ng.NewWarcfileName()
 	d2, f2 = ng.NewWarcfileName()
-	assert.Regexp(t, regexp.MustCompile(`foo_DNS_\d{6}-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f1)
+	assert.Regexp(t, regexp.MustCompile(`foo_DNS_\d{6}-\d{14}-0001-(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|.+)\.warc`), f1)
 	assert.Equal(t, "myDir", d1)
-	assert.Regexp(t, regexp.MustCompile(`foo_DNS_\d{6}-\d{14}-0002-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f2)
+	assert.Regexp(t, regexp.MustCompile(`foo_DNS_\d{6}-\d{14}-0002-(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|.+)\.warc`), f2)
 	assert.Equal(t, "myDir", d2)
 
 	ng = &gowarc.PatternNameGenerator{
@@ -150,8 +150,8 @@ func Test_getFilename(t *testing.T) {
 	}
 	d1, f1 = ng.NewWarcfileName()
 	d2, f2 = ng.NewWarcfileName()
-	assert.Regexp(t, regexp.MustCompile(`foo_DNS_\d{8}-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f1)
+	assert.Regexp(t, regexp.MustCompile(`foo_DNS_\d{8}-\d{14}-0001-(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|.+)\.warc`), f1)
 	assert.Equal(t, "myDir", d1)
-	assert.Regexp(t, regexp.MustCompile(`foo_DNS_\d{8}-\d{14}-0002-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\.warc`), f2)
+	assert.Regexp(t, regexp.MustCompile(`foo_DNS_\d{8}-\d{14}-0002-(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|.+)\.warc`), f2)
 	assert.Equal(t, "myDir", d2)
 }
