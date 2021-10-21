@@ -124,11 +124,10 @@ func (ww *warcWriter) Write(meta *contentwriter.WriteRequestMeta, record ...gowa
 
 		// Get WarcRecordId from header (<urn:uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx>)
 		warcRecordId := rec.WarcHeader().Get(gowarc.WarcRecordID)
-		// Trim '<' and '>'
-		warcRecordId = strings.TrimSuffix(strings.TrimPrefix(warcRecordId, "<"), ">")
-		warcId, parseErr := uuid.Parse(warcRecordId)
+		// Trim '<' and '>' and parse as 'uuid:xxxxxxxx-xxx-xxx-xxx-xxxxxxxxx'
+		warcId, parseErr := uuid.Parse(strings.TrimSuffix(strings.TrimPrefix(warcRecordId, "<"), ">"))
 		if parseErr != nil {
-			log.Err(parseErr).Msgf("failed to parse %s in %s:%d", gowarc.WarcRecordID, res.FileName, res.FileOffset)
+			log.Err(parseErr).Str("warcRecordId", warcRecordId).Msgf("failed to parse %s at %s:%d", gowarc.WarcRecordID, res.FileName, res.FileOffset)
 		}
 
 		if res.Err == nil && parseErr == nil && revisitKey != "" {
@@ -137,7 +136,7 @@ func (ww *warcWriter) Write(meta *contentwriter.WriteRequestMeta, record ...gowa
 			} else {
 				cr := &contentwriter.CrawledContent{
 					Digest:    revisitKey,
-					WarcId:    warcId.String(),
+					WarcId:    warcRecordId,
 					TargetUri: meta.GetTargetUri(),
 					Date:      timestamppb.New(t),
 				}
