@@ -29,14 +29,15 @@ import (
 )
 
 type writeSessionContext struct {
-	configCache      database.ConfigCache
-	meta             *contentwriter.WriteRequestMeta
-	collectionConfig *config.ConfigObject
-	recordOpts       []gowarc.WarcRecordOption
-	records          map[int32]gowarc.WarcRecord
-	recordBuilders   map[int32]gowarc.WarcRecordBuilder
-	payloadStarted   map[int32]bool
-	rbMapSync        sync.Mutex
+	configCache       database.ConfigCache
+	meta              *contentwriter.WriteRequestMeta
+	collectionConfig  *config.ConfigObject
+	recordOpts        []gowarc.WarcRecordOption
+	records           map[int32]gowarc.WarcRecord
+	recordBuilders    map[int32]gowarc.WarcRecordBuilder
+	payloadStarted    map[int32]bool
+	gotProtocolHeader bool
+	rbMapSync         sync.Mutex
 }
 
 func newWriteSessionContext(configCache database.ConfigCache, recordOpts []gowarc.WarcRecordOption) *writeSessionContext {
@@ -55,6 +56,7 @@ func (s *writeSessionContext) setWriteRequestMeta(w *contentwriter.WriteRequestM
 
 func (s *writeSessionContext) writeProtocolHeader(header *contentwriter.Data) error {
 	recordBuilder := s.getRecordBuilder(header.RecordNum)
+	s.gotProtocolHeader = true
 	if recordBuilder.Size() != 0 {
 		return errors.New("protocol header received twice")
 	}
@@ -67,8 +69,10 @@ func (s *writeSessionContext) writeProtocolHeader(header *contentwriter.Data) er
 func (s *writeSessionContext) writePayload(payload *contentwriter.Data) error {
 	recordBuilder := s.getRecordBuilder(payload.RecordNum)
 	if !s.payloadStarted[payload.RecordNum] {
-		if _, err := recordBuilder.Write([]byte("\r\n")); err != nil {
-			return fmt.Errorf("failed to write pre-payload whitespace to the record builder: %w", err)
+		if s.gotProtocolHeader {
+			if _, err := recordBuilder.Write([]byte("\r\n")); err != nil {
+				return fmt.Errorf("failed to write pre-payload whitespace to the record builder: %w", err)
+			}
 		}
 		s.payloadStarted[payload.RecordNum] = true
 	}
@@ -135,9 +139,12 @@ func (s *writeSessionContext) validateSession() error {
 			rb.AddWarcHeader(gowarc.WarcConcurrentTo, "<"+wct+">")
 		}
 
-		wr, _, err := rb.Build()
+		wr, val, err := rb.Build()
 		if err != nil {
 			return fmt.Errorf("failed to build record number %d: %w", k, err)
+		}
+		if !val.Valid() {
+			return fmt.Errorf("failed to validate record number %d: %w", k, err)
 		}
 		s.records[k] = wr
 	}
