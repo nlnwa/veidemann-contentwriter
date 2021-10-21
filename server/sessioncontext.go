@@ -26,12 +26,9 @@ import (
 	"github.com/nlnwa/veidemann-api/go/config/v1"
 	"github.com/nlnwa/veidemann-api/go/contentwriter/v1"
 	"github.com/nlnwa/veidemann-contentwriter/database"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 type writeSessionContext struct {
-	log              zerolog.Logger
 	configCache      database.ConfigCache
 	meta             *contentwriter.WriteRequestMeta
 	collectionConfig *config.ConfigObject
@@ -49,7 +46,6 @@ func newWriteSessionContext(configCache database.ConfigCache, recordOpts []gowar
 		records:        make(map[int32]gowarc.WarcRecord),
 		recordBuilders: make(map[int32]gowarc.WarcRecordBuilder),
 		payloadStarted: make(map[int32]bool),
-		log:            log.Logger,
 	}
 }
 
