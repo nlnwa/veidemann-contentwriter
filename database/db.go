@@ -21,7 +21,8 @@ import (
 	"fmt"
 	configV1 "github.com/nlnwa/veidemann-api/go/config/v1"
 	"github.com/nlnwa/veidemann-api/go/contentwriter/v1"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
+	zlog "github.com/rs/zerolog/log"
 	r "gopkg.in/rethinkdb/rethinkdb-go.v6"
 	"time"
 )
@@ -34,6 +35,7 @@ type RethinkDbConnection struct {
 	waitTimeout  time.Duration
 	queryTimeout time.Duration
 	batchSize    int
+	logger       zerolog.Logger
 }
 
 type Options struct {
@@ -65,11 +67,13 @@ func NewRethinkDbConnection(opts Options) *RethinkDbConnection {
 		waitTimeout:  60 * time.Second,
 		queryTimeout: opts.QueryTimeout,
 		batchSize:    200,
+		logger:       zlog.With().Str("component", "rethinkdb").Logger(),
 	}
 }
 
 // Connect establishes connections
 func (c *RethinkDbConnection) Connect() error {
+	log := c.logger
 	var err error
 	// Set up database RethinkDbConnection
 	c.session, err = r.Connect(c.connectOpts)
@@ -82,6 +86,7 @@ func (c *RethinkDbConnection) Connect() error {
 
 // Close closes the RethinkDbConnection
 func (c *RethinkDbConnection) Close() error {
+	log := c.logger
 	log.Info().Msgf("Closing connection to RethinkDB")
 	return c.session.(*r.Session).Close()
 }
@@ -172,7 +177,7 @@ func (c *RethinkDbConnection) execWrite(ctx context.Context, name string, term *
 // execWithRetry executes given query function repeatedly until successful or max retry limit is reached
 func (c *RethinkDbConnection) execWithRetry(ctx context.Context, name string, q func(ctx context.Context) (*r.Cursor, error)) (cursor *r.Cursor, err error) {
 	attempts := 0
-	execLog := log.Logger.With().Str("op", name).Logger()
+	log := c.logger.With().Str("operation", name).Logger()
 out:
 	for {
 		attempts++
@@ -180,17 +185,17 @@ out:
 		if err == nil {
 			return
 		}
-		execLog.Warn().Err(err).Int("retries", attempts-1).Msg("Failed to execute RethinkDB query")
+		log.Warn().Err(err).Int("retries", attempts-1).Msg("Failed to execute query")
 		switch err {
 		case r.ErrQueryTimeout:
 			err := c.wait()
 			if err != nil {
-				execLog.Warn().Err(err).Msg("Timed out waiting for RethinkDB to be ready")
+				log.Warn().Err(err).Msg("Timed out waiting for database to be ready")
 			}
 		case r.ErrConnectionClosed:
 			err := c.Connect()
 			if err != nil {
-				execLog.Warn().Err(err).Msg("Reconnect to RethinkDB")
+				log.Warn().Err(err).Msg("Failed to reconnect database")
 			}
 		default:
 			break out
