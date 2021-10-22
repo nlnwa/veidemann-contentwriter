@@ -122,13 +122,14 @@ func (ww *warcWriter) Write(meta *contentwriter.WriteRequestMeta, record ...gowa
 			err = res.Err
 		}
 
-		// Get WarcRecordId from header (<urn:uuid:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx>)
-		warcRecordId := rec.WarcHeader().Get(gowarc.WarcRecordID)
+		// Get WarcRecordId from header: '<urn:uuid:xxxxxxxx-xxx-xxx-xxx-xxxxxxxxx>'
+		headerWarcRecordId := rec.WarcHeader().Get(gowarc.WarcRecordID)
 		// Trim '<' and '>'
-		warcRecordId = strings.TrimSuffix(strings.TrimPrefix(warcRecordId, "<"), ">")
+		warcRecordId := strings.TrimSuffix(strings.TrimPrefix(headerWarcRecordId, "<"), ">")
+		// Parse as 'urn:uuid:xxxxxxxx-xxx-xxx-xxx-xxxxxxxxx'
 		warcId, parseErr := uuid.Parse(warcRecordId)
 		if parseErr != nil {
-			log.Err(parseErr).Msgf("failed to parse %s in %s:%d", gowarc.WarcRecordID, res.FileName, res.FileOffset)
+			log.Err(parseErr).Str("warcRecordId", warcRecordId).Msgf("failed to parse %s at %s:%d", gowarc.WarcRecordID, res.FileName, res.FileOffset)
 		}
 
 		if res.Err == nil && parseErr == nil && revisitKey != "" {
@@ -141,6 +142,7 @@ func (ww *warcWriter) Write(meta *contentwriter.WriteRequestMeta, record ...gowa
 					TargetUri: meta.GetTargetUri(),
 					Date:      timestamppb.New(t),
 				}
+				log.Debug().Msgf("Write crawled content: %+v", cr)
 				if err := ww.dbAdapter.WriteCrawledContent(context.TODO(), cr); err != nil {
 					log.Err(err).Msg("Could not write CrawledContent to DB")
 				}
@@ -171,22 +173,22 @@ func (ww *warcWriter) detectRevisit(recordNum int32, record gowarc.WarcRecord, m
 		revisitKey := digest + ":" + ww.filePrefix[:len(ww.filePrefix)-1]
 		duplicate, err := ww.dbAdapter.HasCrawledContent(context.TODO(), revisitKey)
 		if err != nil {
-			log.Err(err).Msg("Failed checking for revisit, treating as new object")
+			log.Warn().Err(err).Str("revisitKey", revisitKey).Msg("Failed checking for revisit, treating as new object")
 			return record, ""
 		}
-
+		log.Debug().Msgf("Duplicate warcId: %v", duplicate.GetWarcId())
 		if duplicate != nil {
 			log.Debug().Msgf("Detected %s as a revisit of %s",
 				record.WarcHeader().Get(gowarc.WarcRecordID), duplicate.GetWarcId())
 			ref := &gowarc.RevisitRef{
 				Profile:        ww.revisitProfile,
-				TargetRecordId: duplicate.GetWarcId(),
+				TargetRecordId: "<urn:uuid:" + duplicate.GetWarcId() + ">",
 				TargetUri:      duplicate.GetTargetUri(),
 				TargetDate:     duplicate.GetDate().AsTime().In(time.UTC).Format(time.RFC3339),
 			}
 			revisit, err := record.ToRevisitRecord(ref)
 			if err != nil {
-				log.Err(err).Msg("Failed checking for revisit, treating as new object")
+				log.Warn().Err(err).Msgf("Failed to create revisit record from %s record, treating as new object", record.Type())
 				return record, ""
 			}
 

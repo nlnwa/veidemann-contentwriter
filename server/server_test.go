@@ -105,7 +105,7 @@ func (s serverAndClient) close() {
 
 type writeRequests []*contentwriter.WriteRequest
 
-var writeReq1 writeRequests = writeRequests{
+var writeReq1 = writeRequests{
 	&contentwriter.WriteRequest{Value: &contentwriter.WriteRequest_ProtocolHeader{ProtocolHeader: &contentwriter.Data{
 		RecordNum: 0,
 		Data: []byte("GET / HTTP/1.0\r\n" +
@@ -160,7 +160,7 @@ var writeReq1 writeRequests = writeRequests{
 	}}},
 }
 
-var writeReq2 writeRequests = writeRequests{
+var writeReq2 = writeRequests{
 	&contentwriter.WriteRequest{Value: &contentwriter.WriteRequest_ProtocolHeader{ProtocolHeader: &contentwriter.Data{
 		RecordNum: 0,
 		Data: []byte("GET / HTTP/1.0\r\n" +
@@ -250,7 +250,7 @@ func TestContentWriterService_Write(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(2, len(reply.Meta.RecordMeta))
 
-	fileNamePattern := `c1_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc`
+	fileNamePattern := `c1_2000101002-\d{14}-0001-(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|.+).warc`
 
 	assert.Equal(int32(0), reply.Meta.RecordMeta[0].RecordNum)
 	assert.Equal(contentwriter.RecordType_REQUEST, reply.Meta.RecordMeta[0].Type)
@@ -310,7 +310,7 @@ func TestContentWriterService_Write_Compressed(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(2, len(reply.Meta.RecordMeta))
 
-	fileNamePattern := `c2_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc.gz`
+	fileNamePattern := `c2_2000101002-\d{14}-0001-(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|.+).warc.gz`
 
 	assert.Equal(int32(0), reply.Meta.RecordMeta[0].RecordNum)
 	assert.Equal(contentwriter.RecordType_REQUEST, reply.Meta.RecordMeta[0].Type)
@@ -349,7 +349,7 @@ func TestContentWriterService_WriteRevisit(t *testing.T) {
 			"date":      time.Date(2021, 8, 27, 13, 52, 0, 0, time.UTC),
 			"digest":    "digest",
 			"targetUri": "http://www.example.com",
-			"warcId":    "<urn:uuid:fff232109-0d71-467f-b728-de86be386c6f>",
+			"warcId":    "fff232109-0d71-467f-b728-de86be386c6f",
 		}, nil).Once()
 
 	ctx := context.Background()
@@ -365,7 +365,7 @@ func TestContentWriterService_WriteRevisit(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(2, len(reply.Meta.RecordMeta))
 
-	fileNamePattern := `c1_2000101002-\d{14}-0001-\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}.warc`
+	fileNamePattern := `c1_2000101002-\d{14}-0001-(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|.+).warc`
 
 	assert.Equal(int32(0), reply.Meta.RecordMeta[0].RecordNum)
 	assert.Equal(contentwriter.RecordType_REQUEST, reply.Meta.RecordMeta[0].Type)
