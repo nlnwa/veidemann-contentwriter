@@ -255,8 +255,8 @@ github.com/modern-go/reflect2 v1.0.1/go.mod h1:bx2lNnkwVCuqBIxFjflWJWanXIb3Rllmb
 github.com/mwitkow/go-conntrack v0.0.0-20161129095857-cc309e4a2223/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
 github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
 github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e/go.mod h1:zD1mROLANZcx1PVRCS0qkT7pwLkGfwJo4zjcN/Tysno=
-github.com/nlnwa/gowarc v1.0.0-alpha.17 h1:UvUT/TGdogfHrvJfzggXLQaEbyB45QPqxeARejNk2CM=
-github.com/nlnwa/gowarc v1.0.0-alpha.17/go.mod h1:37HyH1JP9GpGS5WZsBDTbZ8rwvCCDdsSDOr+3gYGEE4=
+github.com/nlnwa/gowarc v1.0.0-alpha.18 h1:VIOS3h8QqvDsXfswag+qdBwSBKk9OCzT7BHcXvvbliY=
+github.com/nlnwa/gowarc v1.0.0-alpha.18/go.mod h1:37HyH1JP9GpGS5WZsBDTbZ8rwvCCDdsSDOr+3gYGEE4=
 github.com/nlnwa/veidemann-api/go v0.0.0-20211008092321-7fbcd3a6ae1a h1:adaog7CnbfJ5ERP8RkLhsuusVuyVYW1XDH1uhav3q84=
 github.com/nlnwa/veidemann-api/go v0.0.0-20211008092321-7fbcd3a6ae1a/go.mod h1:YGiytwG3UChe80dXRPmNGlnVAIixEangzk6rGMJA5DU=
 github.com/nlnwa/whatwg-url v0.0.0-20200306110950-d1a95e2e8fc3 h1:iarpnapq+Q98GFlSqalcQq9Qc0f5p7hMO/r+65aitOs=
