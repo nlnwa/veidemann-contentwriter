@@ -171,12 +171,13 @@ func (ww *warcWriter) detectRevisit(recordNum int32, record gowarc.WarcRecord, m
 			digest = record.WarcHeader().Get(gowarc.WarcBlockDigest)
 		}
 		revisitKey := digest + ":" + ww.filePrefix[:len(ww.filePrefix)-1]
+
 		duplicate, err := ww.dbAdapter.HasCrawledContent(context.TODO(), revisitKey)
 		if err != nil {
 			log.Warn().Err(err).Str("revisitKey", revisitKey).Msg("Failed checking for revisit, treating as new object")
 			return record, ""
 		}
-		log.Debug().Msgf("Duplicate warcId: %v", duplicate.GetWarcId())
+
 		if duplicate != nil {
 			log.Debug().Msgf("Detected %s as a revisit of %s",
 				record.WarcHeader().Get(gowarc.WarcRecordID), duplicate.GetWarcId())
