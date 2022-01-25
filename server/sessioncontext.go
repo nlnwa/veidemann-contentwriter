@@ -35,8 +35,6 @@ type writeSessionContext struct {
 	recordOpts        []gowarc.WarcRecordOption
 	records           map[int32]gowarc.WarcRecord
 	recordBuilders    map[int32]gowarc.WarcRecordBuilder
-	payloadStarted    map[int32]bool
-	gotProtocolHeader bool
 	rbMapSync         sync.Mutex
 }
 
@@ -46,7 +44,6 @@ func newWriteSessionContext(configCache database.ConfigCache, recordOpts []gowar
 		recordOpts:     recordOpts,
 		records:        make(map[int32]gowarc.WarcRecord),
 		recordBuilders: make(map[int32]gowarc.WarcRecordBuilder),
-		payloadStarted: make(map[int32]bool),
 	}
 }
 
@@ -56,7 +53,6 @@ func (s *writeSessionContext) setWriteRequestMeta(w *contentwriter.WriteRequestM
 
 func (s *writeSessionContext) writeProtocolHeader(header *contentwriter.Data) error {
 	recordBuilder := s.getRecordBuilder(header.RecordNum)
-	s.gotProtocolHeader = true
 	if recordBuilder.Size() != 0 {
 		return errors.New("protocol header received twice")
 	}
@@ -68,14 +64,6 @@ func (s *writeSessionContext) writeProtocolHeader(header *contentwriter.Data) er
 
 func (s *writeSessionContext) writePayload(payload *contentwriter.Data) error {
 	recordBuilder := s.getRecordBuilder(payload.RecordNum)
-	if !s.payloadStarted[payload.RecordNum] {
-		if s.gotProtocolHeader {
-			if _, err := recordBuilder.Write([]byte("\r\n")); err != nil {
-				return fmt.Errorf("failed to write pre-payload whitespace to the record builder: %w", err)
-			}
-		}
-		s.payloadStarted[payload.RecordNum] = true
-	}
 	if _, err := recordBuilder.Write(payload.GetData()); err != nil {
 		return fmt.Errorf("failed to write payload for record number %d to the record builder: %w", payload.RecordNum, err)
 	}
@@ -117,7 +105,6 @@ func (s *writeSessionContext) validateSession() error {
 		return fmt.Errorf("collection with id '%s' is missing or insufficient: %s", s.meta.GetCollectionRef().Id, collectionConfig)
 	}
 	s.collectionConfig = collectionConfig
-
 	for k, rb := range s.recordBuilders {
 		recordMeta, ok := s.meta.RecordMeta[k]
 		if !ok {

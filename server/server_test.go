@@ -148,9 +148,9 @@ var writeReq1 = writeRequests{
 			1: {
 				RecordNum:         1,
 				Type:              contentwriter.RecordType_RESPONSE,
-				Size:              267,
+				Size:              265,
 				RecordContentType: "application/http;msgtype=response",
-				BlockDigest:       "sha1:4126C2DC27F113BEEC37A46276514CD4300DA10D",
+				BlockDigest:       "sha1:9D3D1E0589A62F6091F53482A843399B66926655",
 				PayloadDigest:     "sha1:C37FFB221569C553A2476C22C7DAD429F3492977",
 			},
 		},
@@ -203,9 +203,9 @@ var writeReq2 = writeRequests{
 			1: {
 				RecordNum:         1,
 				Type:              contentwriter.RecordType_RESPONSE,
-				Size:              267,
+				Size:              265,
 				RecordContentType: "application/http;msgtype=response",
-				BlockDigest:       "sha1:4126C2DC27F113BEEC37A46276514CD4300DA10D",
+				BlockDigest:       "sha1:9D3D1E0589A62F6091F53482A843399B66926655",
 				PayloadDigest:     "sha1:C37FFB221569C553A2476C22C7DAD429F3492977",
 			},
 		},
@@ -264,7 +264,7 @@ func TestContentWriterService_Write(t *testing.T) {
 	assert.Equal(int32(1), reply.Meta.RecordMeta[1].RecordNum)
 	assert.Equal(contentwriter.RecordType_RESPONSE, reply.Meta.RecordMeta[1].Type)
 	assert.Regexp(".{8}-.{4}-.{4}-.{4}-.{12}", reply.Meta.RecordMeta[1].WarcId)
-	assert.Equal("sha1:4126C2DC27F113BEEC37A46276514CD4300DA10D", reply.Meta.RecordMeta[1].BlockDigest)
+	assert.Equal("sha1:9D3D1E0589A62F6091F53482A843399B66926655", reply.Meta.RecordMeta[1].BlockDigest)
 	assert.Equal("sha1:C37FFB221569C553A2476C22C7DAD429F3492977", reply.Meta.RecordMeta[1].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[1].CollectionFinalName)
 	assert.Equal("", reply.Meta.RecordMeta[1].RevisitReferenceId)
@@ -324,7 +324,7 @@ func TestContentWriterService_Write_Compressed(t *testing.T) {
 	assert.Equal(int32(1), reply.Meta.RecordMeta[1].RecordNum)
 	assert.Equal(contentwriter.RecordType_RESPONSE, reply.Meta.RecordMeta[1].Type)
 	assert.Regexp(".{8}-.{4}-.{4}-.{4}-.{12}", reply.Meta.RecordMeta[1].WarcId)
-	assert.Equal("sha1:4126C2DC27F113BEEC37A46276514CD4300DA10D", reply.Meta.RecordMeta[1].BlockDigest)
+	assert.Equal("sha1:9D3D1E0589A62F6091F53482A843399B66926655", reply.Meta.RecordMeta[1].BlockDigest)
 	assert.Equal("sha1:C37FFB221569C553A2476C22C7DAD429F3492977", reply.Meta.RecordMeta[1].PayloadDigest)
 	assert.Equal("c2_2000101002", reply.Meta.RecordMeta[1].CollectionFinalName)
 	assert.Equal("", reply.Meta.RecordMeta[1].RevisitReferenceId)
@@ -379,7 +379,7 @@ func TestContentWriterService_WriteRevisit(t *testing.T) {
 	assert.Equal(int32(1), reply.Meta.RecordMeta[1].RecordNum)
 	assert.Equal(contentwriter.RecordType_REVISIT, reply.Meta.RecordMeta[1].Type)
 	assert.Regexp(".{8}-.{4}-.{4}-.{4}-.{12}", reply.Meta.RecordMeta[1].WarcId)
-	assert.Equal("sha1:C3BAD90968CC446FF64FED82D030AAB5A0B5884A", reply.Meta.RecordMeta[1].BlockDigest)
+	assert.Equal("sha1:D5DBF98230700AAF71092C5655F7B55C3DA4CD69", reply.Meta.RecordMeta[1].BlockDigest)
 	assert.Equal("sha1:C37FFB221569C553A2476C22C7DAD429F3492977", reply.Meta.RecordMeta[1].PayloadDigest)
 	assert.Equal("c1_2000101002", reply.Meta.RecordMeta[1].CollectionFinalName)
 	assert.Equal("<urn:uuid:fff232109-0d71-467f-b728-de86be386c6f>", reply.Meta.RecordMeta[1].RevisitReferenceId)
