@@ -144,7 +144,7 @@ func (s *writeSessionContext) validateSession() error {
 			return fmt.Errorf("failed to build record number %d: %w", k, err)
 		}
 		if !val.Valid() {
-			return fmt.Errorf("failed to validate record number %d: %w", k, err)
+			return fmt.Errorf("failed to validate record number %d: %w", k, val)
 		}
 		s.records[k] = wr
 	}
