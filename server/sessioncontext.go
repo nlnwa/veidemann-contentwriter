@@ -29,13 +29,13 @@ import (
 )
 
 type writeSessionContext struct {
-	configCache       database.ConfigCache
-	meta              *contentwriter.WriteRequestMeta
-	collectionConfig  *config.ConfigObject
-	recordOpts        []gowarc.WarcRecordOption
-	records           map[int32]gowarc.WarcRecord
-	recordBuilders    map[int32]gowarc.WarcRecordBuilder
-	rbMapSync         sync.Mutex
+	configCache      database.ConfigCache
+	meta             *contentwriter.WriteRequestMeta
+	collectionConfig *config.ConfigObject
+	recordOpts       []gowarc.WarcRecordOption
+	records          map[int32]gowarc.WarcRecord
+	recordBuilders   map[int32]gowarc.WarcRecordBuilder
+	rbMapSync        sync.Mutex
 }
 
 func newWriteSessionContext(configCache database.ConfigCache, recordOpts []gowarc.WarcRecordOption) *writeSessionContext {
