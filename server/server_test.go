@@ -19,20 +19,22 @@ package server
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"net"
+	"regexp"
+	"testing"
+	"time"
+
 	"github.com/nlnwa/veidemann-api/go/config/v1"
 	"github.com/nlnwa/veidemann-api/go/contentwriter/v1"
 	"github.com/nlnwa/veidemann-contentwriter/database"
 	"github.com/nlnwa/veidemann-contentwriter/settings"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	r "gopkg.in/rethinkdb/rethinkdb-go.v6"
-	"io/ioutil"
-	"net"
-	"regexp"
-	"testing"
-	"time"
 )
 
 const bufSize = 1024 * 1024
@@ -88,7 +90,7 @@ func newServerAndClient(settings settings.Settings) serverAndClient {
 		return serverAndClient.lis.Dial()
 	}
 	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithInsecure())
+	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(fmt.Errorf("Failed to dial bufnet: %v", err))
 	}
