@@ -19,5 +19,5 @@ require (
 	github.com/uber/jaeger-lib v2.4.1+incompatible // indirect
 	google.golang.org/grpc v1.56.2
 	google.golang.org/protobuf v1.30.0
-	gopkg.in/rethinkdb/rethinkdb-go.v6 v6.2.1
+	gopkg.in/rethinkdb/rethinkdb-go.v6 v6.2.2
 )
