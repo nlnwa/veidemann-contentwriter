@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/nlnwa/gowarc"
 	"github.com/nlnwa/veidemann-api/go/config/v1"
@@ -59,11 +60,13 @@ func newWarcWriter(s settings.Settings, db database.DbAdapter, c *config.ConfigO
 		subCollection:    recordMeta.GetSubCollection(),
 		filePrefix:       createFilePrefix(c.GetMeta().GetName(), recordMeta.GetSubCollection(), now(), c.GetCollection().GetCollectionDedupPolicy()),
 	}
-	switch s.WarcVersion() {
+	switch warcVersion := s.WarcVersion(); warcVersion {
 	case gowarc.V1_1:
 		ww.revisitProfile = gowarc.ProfileIdenticalPayloadDigestV1_1
 	case gowarc.V1_0:
 		ww.revisitProfile = gowarc.ProfileIdenticalPayloadDigestV1_0
+	default:
+		panic(fmt.Sprintf("unsupported WARC version: '%s'", warcVersion))
 	}
 	ww.initFileWriter()
 
