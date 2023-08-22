@@ -956,8 +956,8 @@ github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f/go.mod h1:qRW
 github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e/go.mod h1:zD1mROLANZcx1PVRCS0qkT7pwLkGfwJo4zjcN/Tysno=
 github.com/nlnwa/gowarc v1.0.0-alpha.19 h1:sCHPnGZ6tlf97w3WjDwAJO9WLZB/Y76R6NL6X+uVOBo=
 github.com/nlnwa/gowarc v1.0.0-alpha.19/go.mod h1:37HyH1JP9GpGS5WZsBDTbZ8rwvCCDdsSDOr+3gYGEE4=
-github.com/nlnwa/veidemann-api/go v1.0.0-rc.1 h1:NoVvv5jfxkgDcOOC0mOPxXxI/vS5i6vG3uxasHy60Ag=
-github.com/nlnwa/veidemann-api/go v1.0.0-rc.1/go.mod h1:6VcCKFOJdSgmWHO1jatc06S+leujXun8Gsb6Hrh/zKY=
+github.com/nlnwa/veidemann-api/go v1.0.0 h1:Y1VYSo8H2DAAQt+SvyszaxCgknkH/Fe7BUQ6qeL6eu4=
+github.com/nlnwa/veidemann-api/go v1.0.0/go.mod h1:F+zWaiGQSIpItkvM/VOIihUKf87OT21EUUgeXllt2c4=
 github.com/nlnwa/whatwg-url v0.0.0-20200306110950-d1a95e2e8fc3 h1:iarpnapq+Q98GFlSqalcQq9Qc0f5p7hMO/r+65aitOs=
 github.com/nlnwa/whatwg-url v0.0.0-20200306110950-d1a95e2e8fc3/go.mod h1:v3hJLcAdjhIn7PA89dVhJ9GSWooX0z2/qPgwlhz0HD8=
 github.com/oklog/ulid v1.3.1/go.mod h1:CirwcVhetQ6Lv90oh/F+FBtV6XMibvdAFo93nm5qn4U=
@@ -1777,7 +1777,6 @@ google.golang.org/grpc v1.52.3/go.mod h1:pu6fVzoFb+NBYNAvQL08ic+lvB2IojljRYuun5v
 google.golang.org/grpc v1.53.0/go.mod h1:OnIrk0ipVdj4N5d9IUoFUx72/VlD7+jUsHwZgwSMQpw=
 google.golang.org/grpc v1.54.0/go.mod h1:PUSEXI6iWghWaB6lXM4knEgpJNu2qUcKfDtNci3EC2g=
 google.golang.org/grpc v1.55.0/go.mod h1:iYEXKGkEBhg1PjZQvoYEVPTDkHo1/bjTnfwTeGONTY8=
-google.golang.org/grpc v1.56.2/go.mod h1:I9bI3vqKfayGqPUAwGdOSu7kt6oIJLixfffKrpXqQ9s=
 google.golang.org/grpc v1.57.0 h1:kfzNeI/klCGD2YPMUlaGNT3pxvYfga7smW3Vth8Zsiw=
 google.golang.org/grpc v1.57.0/go.mod h1:Sd+9RMTACXwmub0zcNY2c4arhtrbBYD1AUHI/dt16Mo=
 google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0/go.mod h1:6Kw0yEErY5E/yWrBtf03jp27GLLJujG4z/JK95pnjjw=
