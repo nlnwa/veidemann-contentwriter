@@ -71,6 +71,7 @@ linters:
     - grouper
     - ifshort
     - importas
+    - inamedparam
     - interfacebloat
     - interfacer
     - ireturn
@@ -93,9 +94,11 @@ linters:
     - nosnakecase
     - nosprintfhostport
     - paralleltest
+    - perfsprint
     - prealloc
     - predeclared
     - promlinter
+    - protogetter
     - reassign
     - revive
     - rowserrcheck
@@ -107,6 +110,7 @@ linters:
     - tagliatelle
     - tenv
     - testableexamples
+    - testifylint
     - testpackage
     - thelper
     - tparallel
