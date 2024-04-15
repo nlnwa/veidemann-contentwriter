@@ -90,7 +90,7 @@ func newServerAndClient(settings settings.Settings) serverAndClient {
 		return serverAndClient.lis.Dial()
 	}
 	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(ctx, "bufnet", grpc.WithContextDialer(bufDialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(fmt.Errorf("Failed to dial bufnet: %v", err))
 	}
