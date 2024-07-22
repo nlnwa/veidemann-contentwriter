@@ -19,8 +19,8 @@ package server
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
 	"regexp"
 	"testing"
 	"time"
@@ -393,7 +393,7 @@ func TestContentWriterService_WriteRevisit(t *testing.T) {
 }
 
 func dirHasFilesMatching(t *testing.T, dir string, pattern string, count int) bool {
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		panic(err)
 	}
