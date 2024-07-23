@@ -1,5 +1,6 @@
 output:
-  format: github-actions
+  formats:
+    - format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
   uniq-by-line: true
@@ -14,11 +15,14 @@ issues:
   max-same-issues: 0
 
 severity:
+  default-severity: error
   case-sensitive: true
 
 linters:
   enable-all: true
   disable:
+    # magic numbers are fine if used "correctly". the linter is too strict.
+    - mnd # magic number detector
   # TODO(https://github.com/nlnwa/go_container/issues/3): The following
   # sub-linters should be evaluated if they are going to be enabled or not.
     - asasalint
@@ -28,19 +32,18 @@ linters:
     - containedctx
     - contextcheck
     - cyclop
-    - deadcode
     - decorder
     - depguard
     - dogsled
     - dupl
     - dupword
     - durationcheck
+    - err113
     - errchkjson
     - errname
     - errorlint
     - execinquery
     - exhaustive
-    - exhaustivestruct
     - exhaustruct
     - exportloopref
     - forbidigo
@@ -57,11 +60,9 @@ linters:
     - gocyclo
     - godot
     - godox
-    - goerr113
     - gofumpt
     - goheader
     - goimports
-    - golint
     - gomnd
     - gomoddirectives
     - gomodguard
@@ -69,17 +70,14 @@ linters:
     - gosec
     - gosmopolitan
     - grouper
-    - ifshort
     - importas
     - inamedparam
     - interfacebloat
-    - interfacer
     - ireturn
     - lll
     - loggercheck
     - maintidx
     - makezero
-    - maligned
     - mirror
     - misspell
     - musttag
@@ -91,7 +89,6 @@ linters:
     - noctx
     - nolintlint
     - nonamedreturns
-    - nosnakecase
     - nosprintfhostport
     - paralleltest
     - perfsprint
@@ -102,9 +99,7 @@ linters:
     - reassign
     - revive
     - rowserrcheck
-    - scopelint
     - sqlclosecheck
-    - structcheck
     - stylecheck
     - tagalign
     - tagliatelle
@@ -117,7 +112,6 @@ linters:
     - unconvert
     - unparam
     - usestdlibvars
-    - varcheck
     - varnamelen
     - wastedassign
     - whitespace
