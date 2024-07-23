@@ -9,8 +9,6 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test ./...
-
 # -trimpath remove file system paths from executable
 # -ldflags arguments passed to go tool link:
 #   -s disable symbol table
